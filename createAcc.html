@@ -9,12 +9,31 @@
         <span>
         <h1>Create Account</h1>
         </span>
-        <div>
-            <h2>field</h2>
-        </div>
+        <form id="create-form">
+            <div>
+                <label for="username">Username:</label)<br />
+                <input id="username" name="username" type="text" required /><br />
+            </div>
+            <div>
+                <label for="password">Password:</label<br />
+                <input id="password" name="password" type="password" required /><br />
+            </div>
+            
+            <div>
+                <label for="confirm-password">Confirm Password:</label><br />
+                <input
+                    id="confirm-password"
+                    name="confirm-password"
+                    type="password"
+                    required
+                />
+            </div>
+                <button type="submit">Create Account</button>
+        </form>
         <div>
             <button id="to_home">Home</button>
         </div>
+        <p id="create-message" style="color: red; margin-top: 1rem;"></p>
         <script src="scripts.js" defer></script>
     </body>
 </html>

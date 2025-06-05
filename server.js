@@ -5,6 +5,8 @@ const path = require('path');
 const chokidar = require('chokidar');
 const WebSocket = require('ws');
 
+const { handleCreateAccount, handleSignIn } = require('./auth.js');
+
 const PORT = 3000;
 const WS_PORT = 35729;
 
@@ -14,7 +16,16 @@ const mimeTypes = {
     '.js' : 'application/javascript',
 };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+
+    if (req.method === 'POST' && req.url === '/create-account') {
+        return handleCreateAccount(req, res);
+    }
+
+    if (req.method === 'POST' && req.url === '/sign-in') {
+        return handleSignIn(req, res);
+    }
+
     let file = req.url === '/' ? '/index.html' : req.url;
     let filePath = path.join(__dirname, file);
     let ext = path.extname(filePath);
