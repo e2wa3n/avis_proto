@@ -15,7 +15,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 });
 
 db.run(
-    `CREATE TABLE IF NOT EXISTS users (
+    `CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL
@@ -61,7 +61,7 @@ async function handleCreateAccount(req, res) {
         const passwordHash = await bcrypt.hash(password, saltRounds);
 
         const stmt = db.prepare(
-            `INSERT INTO users (username, password_hash) VALUES (?, ?);`
+            `INSERT INTO accounts (username, password_hash) VALUES (?, ?);`
         );
 
         stmt.run(username, passwordHash, function (err) {
@@ -115,7 +115,7 @@ async function handleSignIn(req, res) {
         }
 
         db.get(
-            `SELECT password_hash FROM users WHERE username = ?;`,
+            `SELECT password_hash FROM accounts WHERE username = ?;`,
             [username],
             async (err, row) => {
                 if (err) {

@@ -84,3 +84,57 @@ if (createForm) {
     });
 }
 
+
+
+const signInForm = document.getElementById('signin-form');
+
+if (signInForm) {
+    const signinMsg = document.getElementById('signin-message');
+
+    signInForm.addEventListener('submit', async (evt) => {
+        evt.preventDefault();
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        if(!username || !password) {
+            signinMsg.textContent = 'Please enter both username and password';
+            return;
+        }
+        signinMsg.textContent = '';
+
+        try {
+            const response = await fetch('/sign-in', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                signinMsg.textContent = data.message;
+                return;
+            }
+
+            alert('Sign-in successful!\n\nRedirecting to your profile');
+            window.location.href = 'profile.html';
+        } catch (err) {
+            console.error('Fetch/JSON error during sign-in', err);
+            signinMsg.textContent = 'Network error. Please try again later.';
+        }
+    });
+}
+
+const signOutBtn = document.getElementById('to_signout');
+if (signOutBtn) {
+    signOutBtn.addEventListener('click', () => {
+        window.location.href = 'index.html';
+    });
+}
+
+
+
+

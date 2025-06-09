@@ -8,12 +8,16 @@
     <body>
         <h1>Sign In</h1>
         <div>
-            <form action = "/sign-in" method="POST">
-                <label for="username">Username:</label><br />
-                <input id="username" name="username" type="text" required /><br />
+            <form id="signin-form">
+                <div>
+                    <label for="username">Username:</label><br />
+                    <input id="username" name="username" type="text" required /><br />
+                </div>
 
-                <label for="password">Password:</label><br />
-                <input id="password" name="password" type="password" required /><br />
+                <div>
+                    <label for="password">Password:</label><br />
+                    <input id="password" name="password" type="password" required /><br />
+                </div>
 
                 <button type="submit">Sign In</button>
             </form>
@@ -21,6 +25,9 @@
         <div>
             <button id="to_home">Home</button>
         </div>
+
+        <p id="signin-message" style="color: red; margin-top: 1rem;"></p>
+
         <script src="scripts.js" defer></script>
     </body>
 </html>
