@@ -18,11 +18,12 @@ db.run(
     `CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL
+        password_hash TEXT NOT NULL,
+        date_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );`,
     (err) => {
-        if (err) console.error('Error creating users table:', err.message);
-        else console.log('Users table ready');
+        if (err) console.error('Error creating accounts table:', err.message);
+        else console.log('Accounts table ready');
     }
 );
 
@@ -115,7 +116,9 @@ async function handleSignIn(req, res) {
         }
 
         db.get(
-            `SELECT password_hash FROM accounts WHERE username = ?;`,
+            `SELECT password_hash, date_created
+               FROM accounts
+              WHERE username = ?;`,
             [username],
             async (err, row) => {
                 if (err) {
@@ -153,7 +156,11 @@ async function handleSignIn(req, res) {
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({success: true}));
+                return res.end(JSON.stringify({
+                    success: true,
+                    username,
+                    date_created: row.date_created
+                }));
             }
         );
     }   catch (err) {

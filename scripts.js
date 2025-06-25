@@ -119,8 +119,11 @@ if (signInForm) {
                 return;
             }
 
+            localStorage.setItem('username', data.username);
+            localStorage.setItem('date_created', data.date_created);
             alert('Sign-in successful!\n\nRedirecting to your profile');
-            window.location.href = 'profile.html';
+            window.location.href= 'profile.html';
+
         } catch (err) {
             console.error('Fetch/JSON error during sign-in', err);
             signinMsg.textContent = 'Network error. Please try again later.';
@@ -135,6 +138,19 @@ if (signOutBtn) {
     });
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    const userNameEl = document.getElementById('user-name');
+    const memberSinceEl = document.getElementById('member-since');
 
+    if(userNameEl && memberSinceEl) {
+        const username = localStorage.getItem('username');
+        const dateCreated = localStorage.getItem('date_created');
+
+        userNameEl.textContent = username || '';
+        memberSinceEl.textContent = dateCreated
+            ? new Date(dateCreated).toLocaleDateString()
+            : '';
+    }
+});
 
 
