@@ -6,29 +6,41 @@
         <link rel="stylesheet" href="styles.css">
     </head>
     <body>
-        <span>
         <h1>Create Account</h1>
-        </span>
         <form id="create-form">
             <div>
                 <label for="username">Username:</label)<br />
-                <input id="username" name="username" type="text" required /><br />
+                <input id="username" name="username" type="text" required /><br/>
             </div>
             <div>
                 <label for="password">Password:</label<br />
-                <input id="password" name="password" type="password" required /><br />
+                <input id="password" name="password" type="password" required /><br/>
             </div>
             
             <div>
-                <label for="confirm-password">Confirm Password:</label><br />
+                <label for="confirm-password">Confirm Password:</label><br/>
                 <input
                     id="confirm-password"
                     name="confirm-password"
                     type="password"
                     required
-                />
+                /><br/>
             </div>
-                <button type="submit">Create Account</button>
+
+            <div>
+                <label for="first_name">First Name:</label></br>
+                <input id="first_name" name="fist_name" type="text" required /><br/>
+            </div>
+            <div>
+                <label for="last_name">Last Name:</label></br>
+                <input id="last_name" name="last_name" type="text" required /><br/>
+            </div>
+            <div>
+                <label for="email">Email:</label><br/>
+                <input id="email" name="email" type="email" required /><br/>
+            </div>
+
+            <button type="submit">Create Account</button>
         </form>
         <div>
             <button id="to_home">Home</button>
