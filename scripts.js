@@ -44,8 +44,16 @@ if (createForm) {
         const passwordEl = document.getElementById('password');
         const confirmPassword = document.getElementById('confirm-password').value;
 
+        const emailEl = document.getElementById('email');
+        const email = emailEl.value.trim();
+
         const username = usernameEl.value.trim()
         const password = passwordEl.value;
+
+        if (!email) {
+            messageP.textContent = 'Please enter your email';
+            return;
+        }
 
         if (!username || !password) {
             messageP.textContent = 'Please enter your both a username and a password';
@@ -65,7 +73,7 @@ if (createForm) {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: new URLSearchParams({ username, password })
+                body: new URLSearchParams({ username, email, password })
             });
 
             const data = await response.json();

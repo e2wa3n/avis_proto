@@ -18,6 +18,7 @@ db.run(
     `CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         date_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );`,
@@ -38,6 +39,7 @@ function parseFormBody(req) {
             const params = new URLSearchParams(body);
             resolve({
                 username: params.get('username') || '',
+                email:    params.get('email')    || '',
                 password: params.get('password') || ''
             });
         });
@@ -47,7 +49,7 @@ function parseFormBody(req) {
 
 async function handleCreateAccount(req, res) {
     try {
-        const { username, password } = await parseFormBody(req);
+        const { username, email, password } = await parseFormBody(req);
         if (!username || !password) {
             res.writeHead(400, {'Content-Type': 'application/json' });
             return res.end(
@@ -58,24 +60,38 @@ async function handleCreateAccount(req, res) {
             );
         }
 
+        if (!email) {
+            res.writeHead(400, {'Content-Type':'application/json'});
+            return res.end(JSON.stringify({
+                success: false,
+                message: 'Email is required'
+            }));
+        }
+
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
 
         const stmt = db.prepare(
-            `INSERT INTO accounts (username, password_hash) VALUES (?, ?);`
+            `INSERT INTO accounts (username, email, password_hash) 
+                VALUES (?, ?, ?);`
         );
 
-        stmt.run(username, passwordHash, function (err) {
+        stmt.run(username, email, passwordHash, function (err) {
             if (err) {
                 if (err.code === 'SQLITE_CONSTRAINT') {
-                    res.writeHead(409, {'Content-Type': 'application/json' });
-                    return res.end(
-                        JSON.stringify({
-                            success: false,
-                            message: 'That username is already taken'
-                        })
-                    );
+                    const msg = /accounts\.username/.test(err.message)
+                        ? 'That username is already taken'
+                        : /accounts\.email/.test(err.message)
+                            ? 'That email is already registered'
+                            : 'That username or email is already in use';
+                    res.writeHead(409, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({
+                        success: false,
+                        message: msg
+                    }));
                 }
+
+
                 console.error('DB error on INSERT:', err.message);
                 res.writeHead(500, {'Content-Type': 'application/json' });
                 return res.end(
