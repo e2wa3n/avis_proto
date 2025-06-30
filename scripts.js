@@ -160,6 +160,55 @@ document.addEventListener('DOMContentLoaded', () => {
             ? new Date(dateCreated).toLocaleDateString()
             : '';
     }
+    initProjectUI();
 });
 
+async function initProjectUI() {
+    const listEl = document.getElementById('project-list');
+    const btn = document.getElementById('create-project-btn');
+    const accountId = localStorage.getItem('account_id');
 
+    async function loadProjects() {
+        listEl.innerHTML = '';
+        const res = await fetch(`/projects?account_id=${accountId}`);
+        const projects = await res.json();
+        projects.forEach(p => {
+            const li = document.createElement('li');
+            li.textContent = p.name;
+            
+            //open (future)
+            const openBtn = document.createElement('button');
+            openBtn.textContent = 'Open';
+            openBtn.addEventListener('click', () => {
+                // TODO later: window.location = `/project.html?id=${p.id}`
+            });
+
+            //delete
+            const delBtn = document.createElement('button');
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', async () => {
+                await fetch(`/projects/${p.id}`, { method: 'DELETE' });
+                loadProjects();
+            });
+
+            li.append(openBtn, delBtn);
+            listEl.append(li);
+        });
+    }
+
+    btn.addEventListener('click', async () => {
+        const name = prompt('Enter project name:');
+        if (!name) return;
+        await fetch('/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: accountId, name })
+        });
+
+        //reload
+        loadProjects();
+    });
+
+    //initial load
+    loadProjects();
+}
