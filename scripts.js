@@ -187,7 +187,9 @@ async function initProjectUI() {
             const delBtn = document.createElement('button');
             delBtn.textContent = 'Delete';
             delBtn.addEventListener('click', async () => {
-                await fetch(`/projects/${p.id}`, { method: 'DELETE' });
+                const ok = confirm('Are you sure you want to delete this project? This action is permanent.');
+                if (!ok) return;
+                await fetch(`/projects/${p.id}`, {method: 'DELETE' });
                 loadProjects();
             });
 
