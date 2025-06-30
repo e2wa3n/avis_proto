@@ -132,9 +132,11 @@ async function handleSignIn(req, res) {
         }
 
         db.get(
-            `SELECT password_hash, date_created
-               FROM accounts
-              WHERE username = ?;`,
+            `SELECT id AS account_id,
+                password_hash,
+                date_created
+                FROM accounts
+                WHERE username = ?;`,
             [username],
             async (err, row) => {
                 if (err) {
@@ -174,7 +176,8 @@ async function handleSignIn(req, res) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({
                     success: true,
-                    username,
+                    username: username,
+                    account_id: row.account_id,
                     date_created: row.date_created
                 }));
             }

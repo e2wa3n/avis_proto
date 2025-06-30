@@ -128,6 +128,7 @@ if (signInForm) {
             }
 
             localStorage.setItem('username', data.username);
+            localStorage.setItem('account_id', data.account_id);
             localStorage.setItem('date_created', data.date_created);
             alert('Sign-in successful!\n\nRedirecting to your profile');
             window.location.href= 'profile.html';
