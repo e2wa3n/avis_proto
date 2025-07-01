@@ -124,7 +124,8 @@ const server = http.createServer(async (req, res) => {
         return handleSignIn(req, res);
     }
 
-    let file = req.url === '/' ? '/index.html' : req.url;
+    const pathname = urlObj.pathname;
+    const file = pathname === '/' ? '/index.html' : pathname;0
     let filePath = path.join(__dirname, file);
     let ext = path.extname(filePath);
 

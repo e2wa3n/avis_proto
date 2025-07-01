@@ -161,6 +161,15 @@ document.addEventListener('DOMContentLoaded', () => {
             : '';
     }
     initProjectUI();
+
+    //back button on project.html
+
+    const backBtn = document.getElementById('back-to-profile');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            window.location.href = 'profile.html';
+        });
+    }
 });
 
 async function initProjectUI() {
@@ -180,7 +189,7 @@ async function initProjectUI() {
             const openBtn = document.createElement('button');
             openBtn.textContent = 'Open';
             openBtn.addEventListener('click', () => {
-                // TODO later: window.location = `/project.html?id=${p.id}`
+                window.location.href = `/project.html?id=${p.id}`;
             });
 
             //delete
