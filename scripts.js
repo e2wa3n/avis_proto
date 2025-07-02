@@ -162,6 +162,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initProjectUI();
 
+    //display project name on project.html
+    
+    const projNameEl = document.getElementById('project-name');
+    if (projNameEl) {
+        const params = new URLSearchParams(window.location.search);
+        const projId = params.get('id');
+        if (!projId) {
+            projNameEl.textContent = 'No project specified';
+        }   else {
+            fetch(`/projects/${projId}`)
+                .then(res => {
+                    if (!res.ok) throw new Error(res.status);
+                    return res.json();
+                })
+                .then(proj => {
+                    projNameEl.textContent = proj.name;
+                    document.title = proj.name;
+                })
+                .catch(err => {
+                    console.error('Could not load project', err);
+                    projNameEl.textContent = 'Error loading project';
+                })
+        }
+    }
+
     //back button on project.html
 
     const backBtn = document.getElementById('back-to-profile');

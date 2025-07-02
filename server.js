@@ -63,7 +63,7 @@ const server = http.createServer(async (req, res) => {
             const { account_id, name } = payload;
             if (!account_id || !name) {
                 res.writeHead(400, {'Content-Type': 'application/json'});
-                return res.end(JSON.stingify({
+                return res.end(JSON.stringify({
                     success: false,
                     message: 'account_id and name are required'
                 }));
@@ -101,7 +101,7 @@ const server = http.createServer(async (req, res) => {
             [projId],
             function(err) {
                 if (err) {
-                    console,error('DB error on DELETE projects:', err.message);
+                    console.error('DB error on DELETE projects:', err.message);
                     res.writeHead(500, { 'Content-Type':'application/json' });
                     return res.end(JSON.stringify({
                         success: false,
@@ -124,8 +124,29 @@ const server = http.createServer(async (req, res) => {
         return handleSignIn(req, res);
     }
 
+    if (req.method === 'GET' && /^\/projects\/\d+$/.test(urlObj.pathname)) {
+        const projId = urlObj.pathname.split('/')[2];
+        return db.get(
+            'SELECT id, name, date_created FROM projects WHERE id = ?;',
+            [projId],
+            (err, row) => {
+                if (err) {
+                    console.error('DB error on SELECT project:', err.message);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+                }
+                if (!row) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stingify({ success: false, message: 'Not Found' }));
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify(row));
+            }
+        );
+    }
+
     const pathname = urlObj.pathname;
-    const file = pathname === '/' ? '/index.html' : pathname;0
+    const file = pathname === '/' ? '/index.html' : pathname;
     let filePath = path.join(__dirname, file);
     let ext = path.extname(filePath);
 
