@@ -195,6 +195,22 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'profile.html';
         });
     }
+
+    const changeBtn = document.getElementById('change-pass-btn');
+    if (changeBtn) {
+        const username = localStorage.getItem('username');
+        changeBtn.addEventListener('click', () => {
+            window.location.href = `changePass.html?username=${encodeURIComponent(username)}`;
+        });
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const cpUser = params.get('username');
+    if (cpUser) {
+        const span = document.getElementById('cp-username');
+        if (span) span.textContent = cpUser;
+    }
+
 });
 
 async function initProjectUI() {
@@ -210,7 +226,6 @@ async function initProjectUI() {
             const li = document.createElement('li');
             li.textContent = p.name;
             
-            //open (future)
             const openBtn = document.createElement('button');
             openBtn.textContent = 'Open';
             openBtn.addEventListener('click', () => {
