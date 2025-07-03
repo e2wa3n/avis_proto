@@ -6,7 +6,7 @@ const bcrypt    = require('bcrypt');
 const chokidar  = require('chokidar');
 const WebSocket = require('ws');
 
-const { handleCreateAccount, handleSignIn, parseFormBody } = require('./auth.js');
+const { handleCreateAccount, handleSignIn, handleForgotPassword, parseFormBody } = require('./auth.js');
 
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
@@ -159,6 +159,10 @@ const server = http.createServer(async (req, res) => {
                 return res.end(JSON.stringify(row));
             }
         );
+    }
+
+    if (req.method === 'POST' && urlObj.pathname === '/forgot-password') {
+        return handleForgotPassword(req, res);
     }
 
     // — Static file serving

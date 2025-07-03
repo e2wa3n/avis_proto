@@ -50,6 +50,14 @@ if (createForm) {
         const username = usernameEl.value.trim()
         const password = passwordEl.value;
 
+        const first_name = document.getElementById('first-name').value.trim();
+        const last_name = document.getElementById('last-name').value.trim();
+
+        if (!first_name || !last_name) {
+            messageP.textContent = 'Please enter both first and last name';
+            return;
+        }
+
         if (!email) {
             messageP.textContent = 'Please enter your email';
             return;
@@ -73,7 +81,7 @@ if (createForm) {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: new URLSearchParams({ username, email, password })
+                body: new URLSearchParams({ username, email, first_name, last_name, password })
             });
 
             const data = await response.json();
@@ -144,6 +152,13 @@ const signOutBtn = document.getElementById('to_signout');
 if (signOutBtn) {
     signOutBtn.addEventListener('click', () => {
         window.location.href = 'index.html';
+    });
+}
+
+const forgotPassBtn = document.getElementById('to_forgot_pass');
+if (forgotPassBtn) {
+    forgotPassBtn.addEventListener('click', () => {
+        window.location.href = 'forgotPass.html';
     });
 }
 
@@ -247,6 +262,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const cancel = document.getElementById('cancel-btn');
         cancel.addEventListener('click', () => window.location.href = 'index.html');
+    }
+
+    const forgotForm = document.getElementById('forgot-pass-form');
+    if (forgotForm) {
+        const msgP = document.createElement('p');
+        msgP.style.color = 'red';
+        forgotForm.append(msgP);
+
+        forgotForm.addEventListener('submit', async evt => {
+            evt.preventDefault();
+            const username   = document.getElementById('username').value.trim();
+            const first_name = document.getElementById('first-name').value.trim();
+            const last_name  = document.getElementById('last-name').value.trim();
+            const email      = document.getElementById('email').value.trim();
+
+            if (!username || !first_name || !last_name || !email) {
+                msgP.textContent = 'Please fill in every field';
+                return;
+            }
+            msgP.textContent = '';
+
+            try {
+                const res = await fetch('/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ username, first_name, last_name, email })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    msgP.textContent = data.message;
+                    return;
+                }
+                // on success, send them on to changePass.html
+                window.location.href = `changePass.html?username=${encodeURIComponent(username)}`;
+            }   catch (err) {
+                console.error('Network error during forgot-password', err);
+                msgP.textContent = 'Network error—please try again.';
+            }
+        });
     }
 
 });

@@ -19,6 +19,8 @@ db.run(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         date_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );`,
@@ -31,25 +33,21 @@ db.run(
 function parseFormBody(req) {
     return new Promise((resolve, reject) => {
         let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString();
-        });
+        req.on('data', chunk => body += chunk.toString());
         req.on('end', () => {
-
             const params = new URLSearchParams(body);
-            resolve({
-                username: params.get('username') || '',
-                email:    params.get('email')    || '',
-                password: params.get('password') || ''
-            });
+            const obj = {};
+            for (const [k, v] of params.entries()) obj[k] = v.trim();
+            resolve(obj);
         });
-        req.on('error', (err) => reject(err));
+        req.on('error', reject);
     });
 }
 
 async function handleCreateAccount(req, res) {
+    const { username, email, first_name, last_name, password } = await parseFormBody(req);
+    console.log('Create-account body:', {username, email, first_name, last_name, password });
     try {
-        const { username, email, password } = await parseFormBody(req);
         if (!username || !password) {
             res.writeHead(400, {'Content-Type': 'application/json' });
             return res.end(
@@ -72,11 +70,11 @@ async function handleCreateAccount(req, res) {
         const passwordHash = await bcrypt.hash(password, saltRounds);
 
         const stmt = db.prepare(
-            `INSERT INTO accounts (username, email, password_hash) 
-                VALUES (?, ?, ?);`
+            `INSERT INTO accounts (username, email, first_name, last_name, password_hash) 
+                VALUES (?, ?, ?, ?, ?);`
         );
 
-        stmt.run(username, email, passwordHash, function (err) {
+        stmt.run(username, email, first_name, last_name, passwordHash, function (err) {
             if (err) {
                 if (err.code === 'SQLITE_CONSTRAINT') {
                     const msg = /accounts\.username/.test(err.message)
@@ -194,9 +192,44 @@ async function handleSignIn(req, res) {
     }
 }
 
+async function handleForgotPassword(req, res) {
+  try {
+    const { username, first_name, last_name, email } = await parseFormBody(req);
+    if (!username || !first_name || !last_name || !email) {
+      res.writeHead(400, {'Content-Type':'application/json'});
+      return res.end(JSON.stringify({ success: false, message: 'All fields are required' }));
+    }
+
+    db.get(
+      `SELECT id FROM accounts
+       WHERE username = ? AND email = ? AND first_name = ? AND last_name = ?;`,
+      [username, email, first_name, last_name],
+      (err, row) => {
+        if (err) {
+          console.error('DB error on forgot-password:', err.message);
+          res.writeHead(500, {'Content-Type':'application/json'});
+          return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+        }
+        if (!row) {
+          res.writeHead(404, {'Content-Type':'application/json'});
+          return res.end(JSON.stringify({ success: false, message: 'Account not found or details incorrect' }));
+        }
+        // match! let the client redirect them:
+        res.writeHead(200, {'Content-Type':'application/json'});
+        return res.end(JSON.stringify({ success: true }));
+      }
+    );
+  } catch (err) {
+    console.error('Error in handleForgotPassword:', err);
+    res.writeHead(500, {'Content-Type':'application/json'});
+    res.end(JSON.stringify({ success: false, message: 'Server Error' }));
+  }
+}
+
 module.exports = {
     handleCreateAccount,
     handleSignIn,
+    handleForgotPassword,
     parseFormBody
 };
 
