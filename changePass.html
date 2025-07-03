@@ -7,6 +7,20 @@
     <body>
         <h1>Change Avis Password for <span id="cp-username"></span></h1>
 
+        <form id="change-pass-form">
+            <div>
+                <label for="new-password">New Password:</label><br>
+                <input id="new-password" name="new-password" type="password" required>
+            </div>
+            <div>
+                <label for="confirm-password">Confirm New Password:</label><br>
+                <input id="confirm-password" name="confirm-password" type="password" required>
+            </div>
+            <p id="change-msg" style="color: red;"></p>
+            <button type="submit">Save New Password</button>
+            <button type="button" id="cancel-btn">Cancel</button>
+        </form>
+
         <script src="scripts.js" defer></script>
     </body>
 </html>

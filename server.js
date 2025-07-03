@@ -1,38 +1,38 @@
 // server.js
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const chokidar = require('chokidar');
+const http      = require('http');
+const fs        = require('fs');
+const path      = require('path');
+const bcrypt    = require('bcrypt');
+const chokidar  = require('chokidar');
 const WebSocket = require('ws');
 
-const { handleCreateAccount, handleSignIn } = require('./auth.js');
+const { handleCreateAccount, handleSignIn, parseFormBody } = require('./auth.js');
 
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
 const db = new sqlite3.Database(DB_PATH, err => {
-    if (err) console.error('Could now open users.db for projects:', err.message);
+    if (err) console.error('Could not open users.db for projects:', err.message);
 });
 
-const PORT = 3000;
+const PORT    = 3000;
 const WS_PORT = 35729;
 
 const mimeTypes = {
     '.html': 'text/html',
-    '.css': 'text/css',
-    '.js' : 'application/javascript',
+    '.css' : 'text/css',
+    '.js'  : 'application/javascript',
 };
 
 const server = http.createServer(async (req, res) => {
-
     const urlObj = new URL(req.url, `http://localhost:${PORT}`);
 
+    // — GET /projects?account_id=...
     if (req.method === 'GET' && urlObj.pathname === '/projects') {
         const accountId = urlObj.searchParams.get('account_id');
         if (!accountId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: false, message: 'account_id is required' }));
         }
-
         return db.all(
             'SELECT id, name, date_created FROM projects WHERE account_id = ?;',
             [accountId],
@@ -48,6 +48,7 @@ const server = http.createServer(async (req, res) => {
         );
     }
 
+    // — POST /projects
     if (req.method === 'POST' && urlObj.pathname === '/projects') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -55,60 +56,44 @@ const server = http.createServer(async (req, res) => {
             let payload;
             try {
                 payload = JSON.parse(body);
-            }   catch (e) {
-                res.writeHead(400, { 'Content-Type': 'application/json'});
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ success:false, message: 'Invalid JSON' }));
             }
-
             const { account_id, name } = payload;
             if (!account_id || !name) {
-                res.writeHead(400, {'Content-Type': 'application/json'});
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'account_id and name are required'
-                }));
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'account_id and name are required' }));
             }
-
             db.run(
                 'INSERT INTO projects (account_id, name) VALUES (?, ?);',
                 [account_id, name],
                 function(err) {
                     if (err) {
                         console.error('DB error on INSERT project:', err.message);
-                        res.writeHead(500, { 'Content-Type': 'application/json'});
-                        return res.end(JSON.stringify({
-                            success: false,
-                            message: 'Internal Server Error'
-                        }));
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                     }
-
                     res.writeHead(201, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({
-                        sucess: true,
-                        project_id: this.lastID
-                    }));
+                    return res.end(JSON.stringify({ success: true, project_id: this.lastID }));
                 }
             );
         });
         return;
     }
 
+    // — DELETE /projects/:id
     if (req.method === 'DELETE' && urlObj.pathname.startsWith('/projects/')) {
         const projId = urlObj.pathname.split('/')[2];
-
         db.run(
             'DELETE FROM projects WHERE id = ?;',
             [projId],
             function(err) {
                 if (err) {
                     console.error('DB error on DELETE projects:', err.message);
-                    res.writeHead(500, { 'Content-Type':'application/json' });
-                    return res.end(JSON.stringify({
-                        success: false,
-                        message: 'Internal Server Error'
-                    }));
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                 }
-
                 res.writeHead(204);
                 return res.end();
             }
@@ -116,14 +101,45 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    if (req.method === 'POST' && req.url === '/create-account') {
+    // — Authentication routes
+    if (req.method === 'POST' && urlObj.pathname === '/create-account') {
         return handleCreateAccount(req, res);
     }
-
-    if (req.method === 'POST' && req.url === '/sign-in') {
+    if (req.method === 'POST' && urlObj.pathname === '/sign-in') {
         return handleSignIn(req, res);
     }
 
+    // — Change Password route
+    if (req.method === 'POST' && urlObj.pathname === '/change-password') {
+        try {
+            const { username, password: newPassword } = await parseFormBody(req);
+            if (!username || !newPassword) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Missing data' }));
+            }
+            const hash = await bcrypt.hash(newPassword, 10);
+            db.run(
+                'UPDATE accounts SET password_hash = ? WHERE username = ?',
+                [hash, username],
+                function(err) {
+                    if (err) {
+                        console.error('DB error on CHANGE-PASSWORD:', err.message);
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ success: false, message: 'DB error' }));
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true }));
+                }
+            );
+        } catch (err) {
+            console.error('Server error on CHANGE-PASSWORD:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: false, message: 'Server error' }));
+        }
+        return;
+    }
+
+    // — GET /projects/:id
     if (req.method === 'GET' && /^\/projects\/\d+$/.test(urlObj.pathname)) {
         const projId = urlObj.pathname.split('/')[2];
         return db.get(
@@ -137,7 +153,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 if (!row) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stingify({ success: false, message: 'Not Found' }));
+                    return res.end(JSON.stringify({ success: false, message: 'Not Found' }));
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify(row));
@@ -145,10 +161,11 @@ const server = http.createServer(async (req, res) => {
         );
     }
 
+    // — Static file serving
     const pathname = urlObj.pathname;
-    const file = pathname === '/' ? '/index.html' : pathname;
-    let filePath = path.join(__dirname, file);
-    let ext = path.extname(filePath);
+    const file     = pathname === '/' ? '/index.html' : pathname;
+    const filePath = path.join(__dirname, file);
+    const ext      = path.extname(filePath);
 
     fs.readFile(filePath, (err, data) => {
         if (err) {
@@ -156,19 +173,17 @@ const server = http.createServer(async (req, res) => {
             return res.end('404 Not Found');
         }
         res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
-        res.end(data);
+        return res.end(data);
     });
 });
 
-server.listen(PORT, () =>
-    console.log(`HTTP: http://localhost:${PORT}`)
-);
+server.listen(PORT, () => console.log(`HTTP: http://localhost:${PORT}`));
 
 const wss = new WebSocket.Server({ port: WS_PORT });
 console.log(`WS: ws://localhost:${WS_PORT}`);
 
-const watcher = chokidar.watch(['./index.html','.styles.css', './scripts.js']);
-watcher.on('change', (filePath) => {
+const watcher = chokidar.watch(['./index.html','./styles.css','./scripts.js']);
+watcher.on('change', filePath => {
     console.log(`File changed: ${filePath}, reloading browser...`);
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {

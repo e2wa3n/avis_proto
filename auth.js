@@ -196,6 +196,7 @@ async function handleSignIn(req, res) {
 
 module.exports = {
     handleCreateAccount,
-    handleSignIn
+    handleSignIn,
+    parseFormBody
 };
 

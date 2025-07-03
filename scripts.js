@@ -211,6 +211,44 @@ document.addEventListener('DOMContentLoaded', () => {
         if (span) span.textContent = cpUser;
     }
 
+    const changeForm = document.getElementById('change-pass-form');
+    const msgP = document.getElementById('change-msg');
+    if (changeForm) {
+        changeForm.addEventListener('submit', async evt => {
+            evt.preventDefault();
+            const newPw = document.getElementById('new-password').value;
+            const confirm = document.getElementById('confirm-password').value;
+            if (newPw !== confirm) {
+                msgP.textContent = 'Passwords do not match';
+                return;
+            }
+            msgP.textContent = '';
+            try {
+                const response = await fetch('/change-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        username: cpUser,
+                        password: newPw
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    msgP.textContent = data.message;
+                    return;
+                }
+                alert('Password changed successfully!');
+                window.location.href = 'index.html';
+            } catch (err) {
+                console.error('Error changing password', err);
+                msgP.textContent = 'Network error-please try again.';
+            }
+        });
+
+        const cancel = document.getElementById('cancel-btn');
+        cancel.addEventListener('click', () => window.location.href = 'index.html');
+    }
+
 });
 
 async function initProjectUI() {
