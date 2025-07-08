@@ -33,6 +33,13 @@ if (toHome) {
     });
 }
 
+const toChangeInfo = document.getElementById('to-change-info');
+if (toChangeInfo) {
+    toChangeInfo.addEventListener('click', () => {
+        window.location.href = 'changeAccountInfo.html';
+    });
+}
+
 const createForm = document.getElementById('create-form');
 if (createForm) {
     const messageP = document.getElementById('create-message');
