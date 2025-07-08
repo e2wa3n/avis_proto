@@ -91,6 +91,13 @@ if (createForm) {
                 return;
             }
 
+            localStorage.setItem('username',    data.username);
+            localStorage.setItem('account_id',  data.account_id);
+            localStorage.setItem('date_created',data.date_created);
+            localStorage.setItem('first_name',  data.first_name);
+            localStorage.setItem('last_name',   data.last_name);
+            localStorage.setItem('email',       data.email);
+
             alert('Account created Successfully!\n\nYou will now be directed to sign in');
             window.location.href = '/signIn.html';
         }   catch (err) {
@@ -138,6 +145,9 @@ if (signInForm) {
             localStorage.setItem('username', data.username);
             localStorage.setItem('account_id', data.account_id);
             localStorage.setItem('date_created', data.date_created);
+            localStorage.setItem('first_name', data.first_name);
+            localStorage.setItem('last_name', data.last_name);
+            localStorage.setItem('email', data.email);
             alert('Sign-in successful!\n\nRedirecting to your profile');
             window.location.href= 'profile.html';
 
@@ -159,6 +169,13 @@ const forgotPassBtn = document.getElementById('to_forgot_pass');
 if (forgotPassBtn) {
     forgotPassBtn.addEventListener('click', () => {
         window.location.href = 'forgotPass.html';
+    });
+}
+
+const toAccountInfo = document.getElementById('to_account_info');
+if (toAccountInfo) {
+        toAccountInfo.addEventListener('click', () => {
+            window.location.href = 'accountInfo.html';
     });
 }
 
@@ -303,6 +320,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const el = id => document.getElementById(id);
+
+    if (el('cp-username')) {
+        el('cp-username').textContent      = localStorage.getItem('username')    || '';
+        el('cp-first-name').textContent    = localStorage.getItem('first_name')  || '';
+        el('cp-last-name').textContent     = localStorage.getItem('last_name')   || '';
+        el('cp-email').textContent         = localStorage.getItem('email')       || '';
+        const dt = localStorage.getItem('date_created');
+        el('cp-date-created').textContent  = dt ? new Date(dt).toLocaleDateString() : '';
+    }
+
+    //const backBtn = el('back-to-profile');
+    //if (backBtn) backBtn.addEventListener('click', () => {
+    //    window.location.href = 'profile.html';
+    //});
 });
 
 async function initProjectUI() {

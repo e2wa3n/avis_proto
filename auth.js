@@ -132,7 +132,10 @@ async function handleSignIn(req, res) {
         db.get(
             `SELECT id AS account_id,
                 password_hash,
-                date_created
+                date_created,
+                first_name,
+                last_name,
+                email
                 FROM accounts
                 WHERE username = ?;`,
             [username],
@@ -176,7 +179,10 @@ async function handleSignIn(req, res) {
                     success: true,
                     username: username,
                     account_id: row.account_id,
-                    date_created: row.date_created
+                    date_created: row.date_created,
+                    first_name: row.first_name,
+                    last_name: row.last_name,
+                    email: row.email
                 }));
             }
         );
