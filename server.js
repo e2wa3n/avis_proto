@@ -6,7 +6,7 @@ const bcrypt    = require('bcrypt');
 const chokidar  = require('chokidar');
 const WebSocket = require('ws');
 
-const { handleCreateAccount, handleSignIn, handleForgotPassword, parseFormBody } = require('./auth.js');
+const { handleCreateAccount, handleSignIn, handleForgotPassword, handleUpdateAccount, parseFormBody } = require('./auth.js');
 
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
@@ -137,6 +137,32 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ success: false, message: 'Server error' }));
         }
         return;
+    }
+
+    if (req.method === 'GET' && urlObj.pathname === '/account') {
+        const username = urlObj.searchParams.get('username');
+        if (!username) {
+            res.writeHead(400, {'Content-Type':'application/json'});
+            return res.end(JSON.stringify({success: false, message: 'username required' }));
+        }
+        const sql = 'SELECT username, first_name, last_name, email, date_created FROM accounts WHERE username = ?';
+        return db.get(sql, [username], (err, row) => {
+            if (err) {
+                console.error('DB erroor on GET /account:', err);
+                res.writeHead(500, {'Content-Type':'application/json'});
+                return res.end(JSON.stringify({success: false, message: 'DB error' }));
+            }
+            if (!row) {
+                res.writeHead(404, {'Content-Type':'application/json'});
+                    return res.end(JSON.stringify({sucess: false, message: 'DB error'}));
+            }
+            res.writeHead(200, {'Content-Type':'application/json'});
+            return res.end(JSON.stringify(row));
+        });
+    }
+
+    if (req.method === 'POST' && urlObj.pathname === '/update-account') {
+        return handleUpdateAccount(req, res);
     }
 
     // — GET /projects/:id

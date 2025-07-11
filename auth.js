@@ -161,8 +161,6 @@ async function handleSignIn(req, res) {
                     );
                 }
 
-
-
                 const match = await bcrypt.compare(password, row.password_hash);
                 if (!match) {
                     res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -232,10 +230,89 @@ async function handleForgotPassword(req, res) {
   }
 }
 
+async function handleUpdateAccount(req, res) {
+    const {
+        username,
+        new_username,
+        new_email,
+        new_first_name,
+        new_last_name,
+        password
+    } = await parseFormBody(req);
+
+    // 1) Basic validation
+    if (!username || !new_username || !new_email || !new_first_name || !new_last_name || !password) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: false, message: 'All fields are required' }));
+    }
+
+    // 2) Look up account and verify current password
+    db.get(
+        'SELECT id, password_hash FROM accounts WHERE username = ?',
+        [username],
+        async (err, row) => {
+            if (err) {
+                console.error('DB error on update lookup:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+            }
+            if (!row) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Account not found' }));
+            }
+
+            const match = await bcrypt.compare(password, row.password_hash);
+            if (!match) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Current password is incorrect' }));
+            }
+
+            // 3) Perform the atomic update
+            const stmt = db.prepare(
+                'UPDATE accounts SET username = ?, email = ?, first_name = ?, last_name = ? WHERE id = ?'
+            );
+            stmt.run(
+                new_username,
+                new_email,
+                new_first_name,
+                new_last_name,
+                row.id,
+                function (err) {
+                    if (err && err.code === 'SQLITE_CONSTRAINT') {
+                        const msg = /accounts\.username/.test(err.message)
+                            ? 'That username is already taken'
+                            : /accounts\.email/.test(err.message)
+                                ? 'That email is already registered'
+                                : 'That username or email is already in use';
+                        res.writeHead(409, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ success: false, message: msg }));
+                    } else if (err) {
+                        console.error('DB error on update:', err);
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+                    }
+
+                    // 4) Success
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({
+                        success:    true,
+                        username:   new_username,
+                        first_name: new_first_name,
+                        last_name:  new_last_name,
+                        email:      new_email
+                    }));
+                }
+            );
+            stmt.finalize();
+        }
+    );
+}
+
 module.exports = {
     handleCreateAccount,
     handleSignIn,
     handleForgotPassword,
+    handleUpdateAccount,
     parseFormBody
 };
 

@@ -182,7 +182,7 @@ if (forgotPassBtn) {
 const toAccountInfo = document.getElementById('to_account_info');
 if (toAccountInfo) {
         toAccountInfo.addEventListener('click', () => {
-            window.location.href = 'accountInfo.html';
+            window.location.href = 'account.html';
     });
 }
 

@@ -1,0 +1,64 @@
+<!-- account.html -->
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Account</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>My Account</h1>
+    <p>Refresh page to see changes.</p>
+
+    <!-- VIEW MODE -->
+    <div id="view-mode">
+        <p><strong>Username:</strong>   <span id="view-username"></span></p>
+        <p><strong>First Name:</strong> <span id="view-first-name"></span></p>
+        <p><strong>Last Name:</strong>  <span id="view-last-name"></span></p>
+        <p><strong>Email:</strong>      <span id="view-email"></span></p>
+        <p><strong>Joined:</strong>     <span id="view-date-created"></span></p>
+        <button id="edit-btn">Edit</button>
+        <button id="back-btn">Back</button>
+    </div>
+
+    <!-- EDIT MODE (hidden by default) -->
+    <form id="edit-form" style="display:none;" accept-charset="UTF-8">
+        <div>
+            <label>
+                Username:
+                <input id="edit-username" type="text" required>
+            </label>
+        </div>
+        <div>
+            <label>
+                First Name:
+                <input id="edit-first-name" type="text" required>
+            </label>
+        </div>
+        <div>
+            <label>
+                Last Name:
+                <input id="edit-last-name" type="text" required>
+            </label>
+        </div>
+        <div>
+            <label>
+                Email:
+                <input id="edit-email" type="email" required>
+            </label>
+        </div>
+        <div>
+            <label>
+                Current Password:
+                <input id="edit-password" type="password" required>
+            </label>
+        </div>
+        <p id="edit-error" style="color:red;"></p>
+        <button type="submit">Save</button>
+        <button type="button" id="cancel-btn">Cancel</button>
+    </form>
+
+    <script src="account.js" defer></script>
+</body>
+</html>
