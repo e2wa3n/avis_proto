@@ -148,7 +148,7 @@ const server = http.createServer(async (req, res) => {
         const sql = 'SELECT username, first_name, last_name, email, date_created FROM accounts WHERE username = ?';
         return db.get(sql, [username], (err, row) => {
             if (err) {
-                console.error('DB erroor on GET /account:', err);
+                console.error('DB error on GET /account:', err);
                 res.writeHead(500, {'Content-Type':'application/json'});
                 return res.end(JSON.stringify({success: false, message: 'DB error' }));
             }
