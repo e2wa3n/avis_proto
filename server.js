@@ -11,7 +11,7 @@ const { handleCreateAccount, handleSignIn, handleForgotPassword, handleUpdateAcc
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
 const db = new sqlite3.Database(DB_PATH, err => {
-    if (err) console.error('Could not open users.db for projects:', err.message);
+    if (err) console.error('Could not open users.db for sessions:', err.message);
 });
 
 const PORT    = 3000;
@@ -26,19 +26,19 @@ const mimeTypes = {
 const server = http.createServer(async (req, res) => {
     const urlObj = new URL(req.url, `http://localhost:${PORT}`);
 
-    // — GET /projects?account_id=...
-    if (req.method === 'GET' && urlObj.pathname === '/projects') {
+    // — GET /sessions?account_id=...
+    if (req.method === 'GET' && urlObj.pathname === '/sessions') {
         const accountId = urlObj.searchParams.get('account_id');
         if (!accountId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: false, message: 'account_id is required' }));
         }
         return db.all(
-            'SELECT id, name, date_created FROM projects WHERE account_id = ?;',
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE account_id = ?;',
             [accountId],
             (err, rows) => {
                 if (err) {
-                    console.error('DB error on SELECT projects:', err.message);
+                    console.error('DB error on SELECT sessions:', err.message);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                 }
@@ -48,8 +48,8 @@ const server = http.createServer(async (req, res) => {
         );
     }
 
-    // — POST /projects
-    if (req.method === 'POST' && urlObj.pathname === '/projects') {
+    // — POST /sessions
+    if (req.method === 'POST' && urlObj.pathname === '/sessions') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
@@ -66,31 +66,31 @@ const server = http.createServer(async (req, res) => {
                 return res.end(JSON.stringify({ success: false, message: 'account_id and name are required' }));
             }
             db.run(
-                'INSERT INTO projects (account_id, name) VALUES (?, ?);',
+                'INSERT INTO sessions (account_id, p_name) VALUES (?, ?);',
                 [account_id, name],
                 function(err) {
                     if (err) {
-                        console.error('DB error on INSERT project:', err.message);
+                        console.error('DB error on INSERT session:', err.message);
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                     }
                     res.writeHead(201, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: true, project_id: this.lastID }));
+                    return res.end(JSON.stringify({ success: true, session_id: this.lastID }));
                 }
             );
         });
         return;
     }
 
-    // — DELETE /projects/:id
-    if (req.method === 'DELETE' && urlObj.pathname.startsWith('/projects/')) {
-        const projId = urlObj.pathname.split('/')[2];
+    // — DELETE /sessions/:id
+    if (req.method === 'DELETE' && urlObj.pathname.startsWith('/sessions/')) {
+        const sessionId = urlObj.pathname.split('/')[2];
         db.run(
-            'DELETE FROM projects WHERE id = ?;',
-            [projId],
+            'DELETE FROM sessions WHERE session_id = ?;',
+            [sessionId],
             function(err) {
                 if (err) {
-                    console.error('DB error on DELETE projects:', err.message);
+                    console.error('DB error on DELETE sessions:', err.message);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                 }
@@ -165,15 +165,15 @@ const server = http.createServer(async (req, res) => {
         return handleUpdateAccount(req, res);
     }
 
-    // — GET /projects/:id
-    if (req.method === 'GET' && /^\/projects\/\d+$/.test(urlObj.pathname)) {
-        const projId = urlObj.pathname.split('/')[2];
+    // — GET /sessions/:id
+    if (req.method === 'GET' && /^\/sessions\/\d+$/.test(urlObj.pathname)) {
+        const sessionId = urlObj.pathname.split('/')[2];
         return db.get(
-            'SELECT id, name, date_created FROM projects WHERE id = ?;',
-            [projId],
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE id = ?;',
+            [sessionId],
             (err, row) => {
                 if (err) {
-                    console.error('DB error on SELECT project:', err.message);
+                    console.error('DB error on SELECT session:', err.message);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
                 }

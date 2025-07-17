@@ -199,18 +199,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ? new Date(dateCreated).toLocaleDateString()
             : '';
     }
-    initProjectUI();
+    initSessionUI();
 
-    //display project name on project.html
+    //display session name on session.html
     
-    const projNameEl = document.getElementById('project-name');
+    const projNameEl = document.getElementById('session-name');
     if (projNameEl) {
         const params = new URLSearchParams(window.location.search);
         const projId = params.get('id');
         if (!projId) {
-            projNameEl.textContent = 'No project specified';
+            projNameEl.textContent = 'No session specified';
         }   else {
-            fetch(`/projects/${projId}`)
+            fetch(`/sessions/${projId}`)
                 .then(res => {
                     if (!res.ok) throw new Error(res.status);
                     return res.json();
@@ -220,13 +220,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.title = proj.name;
                 })
                 .catch(err => {
-                    console.error('Could not load project', err);
-                    projNameEl.textContent = 'Error loading project';
+                    console.error('Could not load session', err);
+                    projNameEl.textContent = 'Error loading session';
                 })
         }
     }
 
-    //back button on project.html
+    //back button on session.html
 
     const backBtn = document.getElementById('back-to-profile');
     if (backBtn) {
@@ -344,33 +344,33 @@ document.addEventListener('DOMContentLoaded', () => {
     //});
 });
 
-async function initProjectUI() {
-    const listEl = document.getElementById('project-list');
-    const btn = document.getElementById('create-project-btn');
+async function initSessionUI() {
+    const listEl = document.getElementById('session-list');
+    const btn = document.getElementById('create-session-btn');
     const accountId = localStorage.getItem('account_id');
 
-    async function loadProjects() {
+    async function loadSessions() {
         listEl.innerHTML = '';
-        const res = await fetch(`/projects?account_id=${accountId}`);
-        const projects = await res.json();
-        projects.forEach(p => {
+        const res = await fetch(`/sessions?account_id=${accountId}`);
+        const sessions = await res.json();
+        sessions.forEach(p => {
             const li = document.createElement('li');
             li.textContent = p.name;
             
             const openBtn = document.createElement('button');
             openBtn.textContent = 'Open';
             openBtn.addEventListener('click', () => {
-                window.location.href = `/project.html?id=${p.id}`;
+                window.location.href = `/session.html?id=${p.id}`;
             });
 
             //delete
             const delBtn = document.createElement('button');
             delBtn.textContent = 'Delete';
             delBtn.addEventListener('click', async () => {
-                const ok = confirm('Are you sure you want to delete this project? This action is permanent.');
+                const ok = confirm('Are you sure you want to delete this session? This action is permanent.');
                 if (!ok) return;
-                await fetch(`/projects/${p.id}`, {method: 'DELETE' });
-                loadProjects();
+                await fetch(`/sessions/${p.id}`, {method: 'DELETE' });
+                loadSessions();
             });
 
             li.append(openBtn, delBtn);
@@ -379,18 +379,18 @@ async function initProjectUI() {
     }
 
     btn.addEventListener('click', async () => {
-        const name = prompt('Enter project name:');
+        const name = prompt('Enter listening session name:');
         if (!name) return;
-        await fetch('/projects', {
+        await fetch('/sessions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ account_id: accountId, name })
         });
 
         //reload
-        loadProjects();
+        loadSessions();
     });
 
     //initial load
-    loadProjects();
+    loadSessions();
 }
