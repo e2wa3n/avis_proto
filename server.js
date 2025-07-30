@@ -1,10 +1,12 @@
 // server.js
-const http      = require('http');
-const fs        = require('fs');
-const path      = require('path');
-const bcrypt    = require('bcrypt');
-const chokidar  = require('chokidar');
-const WebSocket = require('ws');
+const http       = require('http');
+const express    = require('express');
+const bodyParser = require('body-parser');
+const fs         = require('fs');
+const path       = require('path');
+const bcrypt     = require('bcrypt');
+const chokidar   = require('chokidar');
+const WebSocket  = require('ws');
 
 const { handleCreateAccount, handleSignIn, handleForgotPassword, handleUpdateAccount, parseFormBody } = require('./auth.js');
 
@@ -13,6 +15,35 @@ const DB_PATH = path.join(__dirname, 'users.db');
 const db = new sqlite3.Database(DB_PATH, err => {
     if (err) console.error('Could not open users.db for sessions:', err.message);
 });
+
+const app = express();
+app.use(bodyParser.json());
+
+// Ingest endpoint - UDP listener will POST here
+app.post('/api/ingest', async (req, res) => {
+    const p = req.body;
+    try {
+        switch (p.type) {
+            case 3:
+                // TODO: INSERT into node_sessions
+                break;
+            case 2:
+                // TODO: INSERT into weather_instances
+                break;
+            case 1:
+                // TODO: INSERT into bird_instances
+                break;
+            default:
+                throw new Error(`Unknown type: ${p.type}`);
+        }
+        res.json({ status: 'ok' });
+    }   catch (err) {
+        console.error('INGEST ERROR:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.use((req, res) => server.emit('request', req, res));
 
 const PORT    = 3000;
 const WS_PORT = 35729;
@@ -207,7 +238,8 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
-server.listen(PORT, () => console.log(`HTTP: http://localhost:${PORT}`));
+app.listen(PORT, '0.0.0.0', () => 
+    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP & ingest)`));
 
 const wss = new WebSocket.Server({ port: WS_PORT });
 console.log(`WS: ws://localhost:${WS_PORT}`);

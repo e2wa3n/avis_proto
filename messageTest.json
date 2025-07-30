@@ -1,6 +1,6 @@
 {
     "type": 1,
-    "node_id": "26011B02",
+    "node_id": "26011B01",
     "common_name": "Hermit Thrush",
     "confidence_level": 89,
     "time_stamp": "2025-07-25T12:07:54Z"
@@ -8,7 +8,7 @@
 
 {
     "type": 2,
-    "node_id": "26011B09",
+    "node_id": "26011B01",
     "temp": 78,
     "humid": 63,
     "b_pressure": 29.77,
@@ -17,7 +17,7 @@
 
 {
     "type": 3,
-    "node_id": "26011B09",
+    "node_id": "26011B01",
     "lat": 37.350373,
     "long": -107.790878,
     "altitude": 8821,
