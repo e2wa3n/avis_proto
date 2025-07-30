@@ -19,19 +19,74 @@ const db = new sqlite3.Database(DB_PATH, err => {
 const app = express();
 app.use(bodyParser.json());
 
+const run = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+            if (err) reject(err);
+            else resolve(this.lastID);
+        });
+    });
+
 // Ingest endpoint - UDP listener will POST here
 app.post('/api/ingest', async (req, res) => {
     const p = req.body;
     try {
         switch (p.type) {
             case 3:
-                // TODO: INSERT into node_sessions
+                await run(
+                    `INSERT INTO node_sessions
+                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?)`,
+                    [ p.session_id, p.node_id, p.altitude, p.lat, p.long, p.time_stamp ]
+                );
                 break;
             case 2:
-                // TODO: INSERT into weather_instances
+                await run(
+                    `INSERT INTO weather_instances
+                        (node_session_id, timestamp, temperature, humidity, pressure)
+                    VALUES (
+                        (SELECT node_session_id
+                        FROM node_sessions
+                        WHERE session_id = ? AND enclosure_id = ?
+                        ORDER BY activation_timestamp DESC
+                        LIMIT 1
+                        ),
+                        ?, ?, ?, ?
+                    )`,
+                   [ p.session_id, p.node_id, p.time_stamp, p.temp, p.humid, p.b_pressure ]
+                );
                 break;
             case 1:
-                // TODO: INSERT into bird_instances
+                await run(
+                    `INSERT INTO bird_instances
+                        (weather_instance_id, node_session_id, timestamp, species, confidence_level)
+                    VALUES (
+                        (SELECT weather_instance_id
+                        FROM weather_instances
+                        WHERE node_session_id = (
+                        SELECT node_session_id
+                        FROM node_sessions
+                        WHERE session_id = ? AND enclosure_id = ?
+                        ORDER BY activation_timestamp DESC
+                        LIMIT 1
+                        )
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                    ),
+                    (SELECT node_session_id
+                    FROM node_sessions
+                    WHERE session_id = ? AND enclosure_id = ?
+                    ORDER BY activation_timestamp DESC
+                    LIMIT 1
+                    ),
+                    ?, ?, ?
+                    )`,
+                    [
+                        p.session_id, p.node_id,
+                        p.session_id, p.node_id,
+                        p.time_stamp, p.common_name, p.confidence_level
+                    ]
+                );
                 break;
             default:
                 throw new Error(`Unknown type: ${p.type}`);
@@ -200,7 +255,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && /^\/sessions\/\d+$/.test(urlObj.pathname)) {
         const sessionId = urlObj.pathname.split('/')[2];
         return db.get(
-            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE id = ?;',
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE session_id = ?;',
             [sessionId],
             (err, row) => {
                 if (err) {
