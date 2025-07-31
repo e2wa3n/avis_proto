@@ -32,31 +32,95 @@ app.post('/api/ingest', async (req, res) => {
     const p = req.body;
     try {
         switch (p.type) {
-            case 3:
-                await run(
-                    `INSERT INTO node_sessions
-                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?)`,
-                    [ p.session_id, p.node_id, p.altitude, p.lat, p.long, p.time_stamp ]
-                );
-                break;
-            case 2:
-                await run(
-                    `INSERT INTO weather_instances
-                        (node_session_id, timestamp, temperature, humidity, pressure)
-                    VALUES (
-                        (SELECT node_session_id
+            case 3: {
+                //avoid inserting duplicate sessions for the same timestamp
+                const existingSession = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT node_session_id
                         FROM node_sessions
-                        WHERE session_id = ? AND enclosure_id = ?
-                        ORDER BY activation_timestamp DESC
-                        LIMIT 1
-                        ),
-                        ?, ?, ?, ?
-                    )`,
-                   [ p.session_id, p.node_id, p.time_stamp, p.temp, p.humid, p.b_pressure ]
-                );
+                        WHERE session_id = ?
+                        AND enclosure_id = ?
+                        AND activation_timestamp = ?
+                        LIMIT 1`,
+                        [ p.session_id, p.node_id, p.time_stamp ],
+                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
+                    );
+                });
+                if (!existingSession) {
+                    await run(
+                        `INSERT INTO node_sessions
+                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        [ p.session_id, p.node_id, p.altitude, p.lat, p.long, p.time_stamp ]
+                    );
+                } else {
+                    console.log(
+                        `Skipping duplicate node_session: ` +
+                        `session_id=${p.session_id}, enclosure_id=${p.node_id}, ` +
+                        `activation_timestamp=${p.time_stamp}`
+                    );
+                }
                 break;
-            case 1:
+            }
+
+            case 2: {
+                // look up the most recent node_session_id (or create a blank one)
+                let nodeSessionId = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT node_session_id
+                        FROM node_sessions
+                        WHERE session_id = ?
+                        AND enclosure_id = ?
+                        ORDER BY activation_timestamp DESC
+                        LIMIT 1`,
+                        [ p.session_id, p.node_id ],
+                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
+                    );
+                });
+                if (!nodeSessionId) {
+                    console.warn(
+                        `No active node_session for session=${p.session_id}, node=${p.node_id}; ` +
+                        `inserting blank placeholder.`
+                    );
+                    nodeSessionId = await run(
+                        `INSERT INTO node_sessions
+                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        [ p.session_id, p.node_id, 0, 0, 0, p.timestamp ]
+                    );
+                }
+
+                // check for an existing weather_instance at that timestamp
+                const existingWeather = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT weather_instance_id
+                        FROM weather_instances
+                        WHERE node_session_id = ?
+                        AND timestamp = ?
+                        LIMIT 1`,
+                        [ nodeSessionId, p.time_stamp ],
+                        (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
+                    );
+                });
+
+                // insert only if its not there
+                if (!existingWeather) {
+                    await run(
+                        `INSERT INTO weather_instances
+                        (node_session_id, timestamp, temperature, humidity, pressure)
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        [ nodeSessionId, p.time_stamp, p.temp, p.humid, p.b_pressure ]
+                    );
+                } else {
+                    console.log(
+                        `Skipping duplicate weather_instance: ` +
+                        `node_session_id=${nodeSessionId}, timestamp=${p.time_stamp}`
+                    );
+                }
+                break;
+            }
+
+            case 1: {
                 await run(
                     `INSERT INTO bird_instances
                         (weather_instance_id, node_session_id, timestamp, species, confidence_level)
@@ -88,6 +152,7 @@ app.post('/api/ingest', async (req, res) => {
                     ]
                 );
                 break;
+            }
             default:
                 throw new Error(`Unknown type: ${p.type}`);
         }
