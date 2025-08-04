@@ -108,7 +108,7 @@ app.post('/api/ingest', async (req, res) => {
                     await run(
                         `INSERT INTO weather_instances
                         (node_session_id, timestamp, temperature, humidity, pressure)
-                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        VALUES (?, ?, ?, ?, ?)`,
                         [ nodeSessionId, p.time_stamp, p.temp, p.humid, p.b_pressure ]
                     );
                 } else {
@@ -121,35 +121,56 @@ app.post('/api/ingest', async (req, res) => {
             }
 
             case 1: {
+                let nodeSessionId = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT node_session_id
+                         FROM node_sessions
+                         WHERE session_id = ?
+                         AND enclosure_id = ?
+                         ORDER BY activation_timestamp DESC
+                         LIMIT 1`,
+                        [ p.session_id, p.node_id ],
+                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
+                    );
+                });
+
+                if(!nodeSessionId) {
+                    console.warn(`No node_session for session=${p.session_id}, node={p.node_id}; inserting placeholder.`);
+                    nodeSessionId = await run(
+                        `INSERT INTO node_sessions
+                         (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
+                         VALUES (?, ?, ?, ?, ?, ?)`,
+                        [ p.session_id, p.node_id, 0, 0, 0, p.time_stamp ]
+                    );
+                }
+                
+                let weatherInstancesId = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT weather_instance_id
+                         FROM weather_instances
+                         WHERE node_session_id = ?
+                         AND timestamp = ?
+                         LIMIT 1`,
+                        [ nodeSessionId, p.timestamp ],
+                        (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
+                    );
+                });
+
+                if (!weatherInstanceId) {
+                    console.warn(`No weather_instance for node_session_id=${nodeSessionId}; inserting placeholder.`);
+                    weatherInstanceId = await run(
+                        `INSERT INTO weather_instances
+                         (node_session_id, timestamp, temperature, humidity, pressure)
+                         VALUES (?, ?, ?, ?, ?)`,
+                        [ nodeSessionId, p.time_stamp, null, null, null ]
+                    );
+                }
+
                 await run(
                     `INSERT INTO bird_instances
-                        (weather_instance_id, node_session_id, timestamp, species, confidence_level)
-                    VALUES (
-                        (SELECT weather_instance_id
-                        FROM weather_instances
-                        WHERE node_session_id = (
-                        SELECT node_session_id
-                        FROM node_sessions
-                        WHERE session_id = ? AND enclosure_id = ?
-                        ORDER BY activation_timestamp DESC
-                        LIMIT 1
-                        )
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                    ),
-                    (SELECT node_session_id
-                    FROM node_sessions
-                    WHERE session_id = ? AND enclosure_id = ?
-                    ORDER BY activation_timestamp DESC
-                    LIMIT 1
-                    ),
-                    ?, ?, ?
-                    )`,
-                    [
-                        p.session_id, p.node_id,
-                        p.session_id, p.node_id,
-                        p.time_stamp, p.common_name, p.confidence_level
-                    ]
+                     (weather_instance_id, node_session_id, timestamp, species, confidence_level)
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [ weatherInstanceId, nodeSessionsId, p.time_stamp, p.common_name, p.confidence_level ]
                 );
                 break;
             }
