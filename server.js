@@ -139,26 +139,49 @@ app.post('/api/ingest', async (req, res) => {
                         `No active node_session for session=${p.session_id} node=${p.node_id}`
                     );
                 }
-
+                
+                // 1 try to find the latest weather at or before this bird
                 let weatherInstanceId = await new Promise((resolve, reject) => {
                     db.get(
                         `SELECT weather_instance_id
                          FROM weather_instances
                          WHERE node_session_id = ?
-                         AND timestamp = ?
+                         AND timestamp <= ?
+                         ORDER BY timestamp DESC
                          LIMIT 1`,
                         [ nodeSessionId, p.time_stamp ],
                         (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
                     );
                 });
 
+                // 2 if none found, fall back to the overall most-recent weather_instance
+                if (!weatherInstanceId) {
+                    console.warn(
+                        `No weather ≤ ${p.time_stamp}, ` +
+                        `falling back to most recent weather for node_session_id=${nodeSessionId}`
+                    );
+                    const fallbackRow = await new Promise((resolve, reject) => {
+                        db.get(
+                            `SELECT weather_instance_id
+                             FROM weather_instances
+                             WHERE node_session_id = ?
+                             ORDER BY timestamp DESC
+                             LIMIT 1`,
+                            [ nodeSessionId ],
+                            (err, row) => err ? reject(err) : resolve(row)
+                        );
+                    });
+                    weatherInstanceId = fallbackRow && fallbackRow.weather_instance_id;
+                }
+                // 3 still none? REAL error
                 if (!weatherInstanceId) {
                     // must have a weather_instance before you can record a bird
                     throw new Error(
-                        `No active weather_instance for node_session_id=${nodeSessionId} at ${p.time_stamp}`
+                        `No weather data at all for node_session_id=${nodeSessionId}`
                     );
                 }
 
+                // insert the bird
                 const species = p.common_name || '';
                 const confidence = p.confidence_level != null ? p.confidence_level : 0;
                 await run(
@@ -179,7 +202,7 @@ app.post('/api/ingest', async (req, res) => {
     }
 });
 
-//app.use((req, res) => server.emit('request', req, res));
+app.use((req, res) => server.emit('request', req, res));
 
 const PORT    = 3000;
 const WS_PORT = 35729;
@@ -215,7 +238,7 @@ const server = http.createServer(async (req, res) => {
         );
     }
     
-    app.use((req, res) => server.emit('request', req, res));
+    //app.use((req, res) => server.emit('request', req, res));
 
     // — POST /sessions
     if (req.method === 'POST' && urlObj.pathname === '/sessions') {
