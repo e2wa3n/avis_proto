@@ -1,7 +1,7 @@
 // server.js
 const http       = require('http');
 const express    = require('express');
-const bodyParser = require('body-parser');
+// const bodyParser = require('body-parser');
 const fs         = require('fs');
 const path       = require('path');
 const bcrypt     = require('bcrypt');
@@ -13,11 +13,11 @@ const { handleCreateAccount, handleSignIn, handleForgotPassword, handleUpdateAcc
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
 const db = new sqlite3.Database(DB_PATH, err => {
-    if (err) console.error('Could not open users.db for sessions:', err.message);
+    if (err) console.error('Could not open users.db:', err.message);
 });
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
 const run = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -30,6 +30,11 @@ const run = (sql, params = []) =>
 // Ingest endpoint - UDP listener will POST here
 app.post('/api/ingest', async (req, res) => {
     const p = req.body;
+
+    if (p.temperature != null) p.temp = p.temperature;
+    if (p.humidity != null) p.humid = p.humidity
+    if (!p.session_id || !p.node_id || !p.time_stamp) throw new Error('Missing required ingestion fields');
+
     try {
         switch (p.type) {
             case 3: {
@@ -64,7 +69,7 @@ app.post('/api/ingest', async (req, res) => {
             }
 
             case 2: {
-                // look up the most recent node_session_id (or create a blank one)
+                // look up the most recent node_session_id
                 let nodeSessionId = await new Promise((resolve, reject) => {
                     db.get(
                         `SELECT node_session_id
@@ -77,16 +82,10 @@ app.post('/api/ingest', async (req, res) => {
                         (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
                     );
                 });
+
                 if (!nodeSessionId) {
-                    console.warn(
-                        `No active node_session for session=${p.session_id}, node=${p.node_id}; ` +
-                        `inserting blank placeholder.`
-                    );
-                    nodeSessionId = await run(
-                        `INSERT INTO node_sessions
-                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?)`,
-                        [ p.session_id, p.node_id, 0, 0, 0, p.time_stamp ]
+                    throw new Error(
+                        `No active node_session for session=${p.session_id} node=${p.node_id}`
                     );
                 }
 
@@ -134,16 +133,13 @@ app.post('/api/ingest', async (req, res) => {
                     );
                 });
 
-                if(!nodeSessionId) {
-                    console.warn(`No node_session for session=${p.session_id}, node={p.node_id}; inserting placeholder.`);
-                    nodeSessionId = await run(
-                        `INSERT INTO node_sessions
-                         (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
-                         VALUES (?, ?, ?, ?, ?, ?)`,
-                        [ p.session_id, p.node_id, 0, 0, 0, p.time_stamp ]
+                if (!nodeSessionId) {
+                    // must have a node_session before you can record a bird
+                    throw new Error(
+                        `No active node_session for session=${p.session_id} node=${p.node_id}`
                     );
                 }
-                
+
                 let weatherInstanceId = await new Promise((resolve, reject) => {
                     db.get(
                         `SELECT weather_instance_id
@@ -157,12 +153,9 @@ app.post('/api/ingest', async (req, res) => {
                 });
 
                 if (!weatherInstanceId) {
-                    console.warn(`No weather_instance for node_session_id=${nodeSessionId}; inserting placeholder.`);
-                    weatherInstanceId = await run(
-                        `INSERT INTO weather_instances
-                         (node_session_id, timestamp, temperature, humidity, pressure)
-                         VALUES (?, ?, ?, ?, ?)`,
-                        [ nodeSessionId, p.time_stamp, 0, 0, 0 ]
+                    // must have a weather_instance before you can record a bird
+                    throw new Error(
+                        `No active weather_instance for node_session_id=${nodeSessionId} at ${p.time_stamp}`
                     );
                 }
 
@@ -186,7 +179,7 @@ app.post('/api/ingest', async (req, res) => {
     }
 });
 
-app.use((req, res) => server.emit('request', req, res));
+//app.use((req, res) => server.emit('request', req, res));
 
 const PORT    = 3000;
 const WS_PORT = 35729;
@@ -221,6 +214,8 @@ const server = http.createServer(async (req, res) => {
             }
         );
     }
+    
+    app.use((req, res) => server.emit('request', req, res));
 
     // — POST /sessions
     if (req.method === 'POST' && urlObj.pathname === '/sessions') {
@@ -381,8 +376,9 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => 
-    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP & ingest)`));
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP & ingest)`);
+});
 
 const wss = new WebSocket.Server({ port: WS_PORT });
 console.log(`WS: ws://localhost:${WS_PORT}`);
