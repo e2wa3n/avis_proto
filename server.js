@@ -86,7 +86,7 @@ app.post('/api/ingest', async (req, res) => {
                         `INSERT INTO node_sessions
                         (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
                         VALUES (?, ?, ?, ?, ?, ?)`,
-                        [ p.session_id, p.node_id, 0, 0, 0, p.timestamp ]
+                        [ p.session_id, p.node_id, 0, 0, 0, p.time_stamp ]
                     );
                 }
 
@@ -144,14 +144,14 @@ app.post('/api/ingest', async (req, res) => {
                     );
                 }
                 
-                let weatherInstancesId = await new Promise((resolve, reject) => {
+                let weatherInstanceId = await new Promise((resolve, reject) => {
                     db.get(
                         `SELECT weather_instance_id
                          FROM weather_instances
                          WHERE node_session_id = ?
                          AND timestamp = ?
                          LIMIT 1`,
-                        [ nodeSessionId, p.timestamp ],
+                        [ nodeSessionId, p.time_stamp ],
                         (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
                     );
                 });
@@ -162,15 +162,17 @@ app.post('/api/ingest', async (req, res) => {
                         `INSERT INTO weather_instances
                          (node_session_id, timestamp, temperature, humidity, pressure)
                          VALUES (?, ?, ?, ?, ?)`,
-                        [ nodeSessionId, p.time_stamp, null, null, null ]
+                        [ nodeSessionId, p.time_stamp, 0, 0, 0 ]
                     );
                 }
 
+                const species = p.common_name || '';
+                const confidence = p.confidence_level != null ? p.confidence_level : 0;
                 await run(
                     `INSERT INTO bird_instances
                      (weather_instance_id, node_session_id, timestamp, species, confidence_level)
                      VALUES (?, ?, ?, ?, ?)`,
-                    [ weatherInstanceId, nodeSessionsId, p.time_stamp, p.common_name, p.confidence_level ]
+                    [ weatherInstanceId, nodeSessionId, p.time_stamp, species, confidence ]
                 );
                 break;
             }
