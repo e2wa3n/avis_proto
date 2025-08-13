@@ -339,10 +339,22 @@ document.addEventListener('DOMContentLoaded', () => {
         el('cp-date-created').textContent  = dt ? new Date(dt).toLocaleDateString() : '';
     }
 
-    //const backBtn = el('back-to-profile');
-    //if (backBtn) backBtn.addEventListener('click', () => {
-    //    window.location.href = 'profile.html';
-    //});
+    const closeSessionBtn = document.getElementById('close-session-btn');
+    if (closeSessionBtn) {
+        closeSessionBtn.addEventListener('click', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const sessionId = params.get('id');
+            if (!sessionId) return;
+
+            const ok = confirm('Are you sure you want to end this session?');
+            if (ok) {
+                await fetch(`/sessions/${sessionId}/close`, { method: 'PUT' });
+                alert('Session has been closed.');
+                window.location.href = 'profile.html'; // Go back to profile
+            }
+        });
+    }
+    loadSessionData();
 });
 
 async function initSessionUI() {
@@ -518,4 +530,48 @@ async function initDeviceUI() {
 
     // 3. Initial load of devices when the page is ready
     loadAndDisplayDevices();
+}
+
+async function loadSessionData() {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('id');
+
+    // Only run this logic if we are on a session page
+    if (!sessionId || !document.getElementById('bird-log')) {
+        return;
+    }
+
+    const res = await fetch(`/sessions/${sessionId}/data`);
+    const data = await res.json();
+
+    // Render GPS Data
+    const gpsContainer = document.getElementById('gps-data');
+    if (data.nodes.length > 0) {
+        const node = data.nodes[0]; // Assuming one node per session for now
+        gpsContainer.innerHTML = `
+            <h4>Node Location</h4>
+            <p>Latitude: ${node.lat}, Longitude: ${node.lng}, Altitude: ${node.altitude}</p>
+        `;
+    }
+
+    // Render Weather Data
+    const weatherLog = document.getElementById('weather-log');
+    weatherLog.innerHTML = ''; // Clear
+    data.weather.forEach(w => {
+        const li = document.createElement('li');
+        const d = new Date(w.timestamp).toLocaleString();
+        li.textContent = `${d}: Temp: ${w.temperature}F, Humidity: ${w.humidity}%, Pressure: ${w.pressure} inHg`;
+        weatherLog.appendChild(li);
+    });
+
+    // Render Bird Data
+    const birdLog = document.getElementById('bird-log');
+    birdLog.innerHTML = ''; // Clear
+    data.birds.forEach(b => {
+        const li = document.createElement('li');
+        const d = new Date(b.timestamp).toLocaleString();
+        const confidenceText = b.confidence_level ? `${b.confidence_level}%` : 'N/A';
+        li.textContent = `${d}: ${b.species} (Confidence: ${confidenceText})`;
+        birdLog.appendChild(li);
+    });
 }

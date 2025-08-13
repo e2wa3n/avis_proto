@@ -51,166 +51,111 @@ const all = (sql, params = []) =>
 
 // Ingest endpoint - UDP listener will POST here
 app.post('/api/ingest', async (req, res) => {
+    
+    //uncomment line below to print ingested .jsons
+    //console.log('--- INGEST PAYLOAD RECEIVED ---', req.body);
+
     const p = req.body;
 
-    if (p.temperature != null) p.temp = p.temperature;
-    if (p.humidity != null) p.humid = p.humidity
-    if (!p.session_id || !p.node_id || !p.time_stamp) throw new Error('Missing required ingestion fields');
+    // The LoRa packet's 'node_id' MUST match the 'devEUI' in the database.
+    const deviceEUI = p.node_id;
+
+    if (!deviceEUI) {
+        return res.status(400).json({ message: 'Missing node_id in payload' });
+    }
 
     try {
+        // Step 1: Find the active, open session associated with this device.
+        // An active session is one that has NOT been closed (`closed_at` is NULL).
+        const sessionQuery = `
+            SELECT s.session_id FROM sessions s
+            JOIN session_devices sd ON s.session_id = sd.session_id
+            JOIN devices d ON sd.device_id = d.device_id
+            WHERE d.devEUI = ? AND s.closed_at IS NULL
+            ORDER BY s.p_date DESC
+            LIMIT 1
+        `;
+        const activeSession = await get(sessionQuery, [deviceEUI]);
+
+        if (!activeSession) {
+            console.warn(`Data from device ${deviceEUI} received, but no active session found.`);
+            return res.status(404).json({ message: 'No active session found for this device.' });
+        }
+
+        const { session_id } = activeSession;
+        if (p.temperature != null) p.temp = p.temperature;
+        if (p.humidity != null) p.humid = p.humidity;
+
+        // The rest of the logic uses this `session_id`.
         switch (p.type) {
-            case 3: {
-                //avoid inserting duplicate sessions for the same timestamp
-                const existingSession = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT node_session_id
-                        FROM node_sessions
-                        WHERE session_id = ?
-                        AND enclosure_id = ?
-                        AND activation_timestamp = ?
-                        LIMIT 1`,
-                        [ p.session_id, p.node_id, p.time_stamp ],
-                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
-                    );
-                });
-                if (!existingSession) {
+            case 3: { // GPS / Node Session Start
+                // First, check if a node_session already exists for this session_id
+                const existingNodeSession = await get(
+                    `SELECT node_session_id FROM node_sessions WHERE session_id = ? LIMIT 1`,
+                    [session_id]
+                );
+
+                // Only create a new node_session if one doesn't already exist.
+                if (!existingNodeSession) {
                     await run(
-                        `INSERT INTO node_sessions
-                        (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?)`,
-                        [ p.session_id, p.node_id, p.altitude, p.lat, p.long, p.time_stamp ]
+                        `INSERT INTO node_sessions (session_id, enclosure_id, altitude, lat, lng, activation_timestamp)
+                         VALUES (?, ?, ?, ?, ?, ?)`,
+                        [session_id, deviceEUI, p.altitude, p.lat, p.long, p.time_stamp]
                     );
                 } else {
-                    console.log(
-                        `Skipping duplicate node_session: ` +
-                        `session_id=${p.session_id}, enclosure_id=${p.node_id}, ` +
-                        `activation_timestamp=${p.time_stamp}`
-                    );
+                    console.log(`Ignoring subsequent telemetry for active session_id: ${session_id}`);
                 }
                 break;
             }
+            case 2: { // Weather
+                const nodeSession = await get(`SELECT node_session_id FROM node_sessions WHERE session_id = ? ORDER BY activation_timestamp DESC LIMIT 1`, [session_id]);
+                if (!nodeSession) throw new Error(`Cannot log weather, no node_session exists for session_id ${session_id}`);
 
-            case 2: {
-                // look up the most recent node_session_id
-                let nodeSessionId = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT node_session_id
-                        FROM node_sessions
-                        WHERE session_id = ?
-                        AND enclosure_id = ?
-                        ORDER BY activation_timestamp DESC
-                        LIMIT 1`,
-                        [ p.session_id, p.node_id ],
-                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
-                    );
-                });
-
-                if (!nodeSessionId) {
-                    throw new Error(
-                        `No active node_session for session=${p.session_id} node=${p.node_id}`
-                    );
-                }
-
-                // check for an existing weather_instance at that timestamp
-                const existingWeather = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT weather_instance_id
-                        FROM weather_instances
-                        WHERE node_session_id = ?
-                        AND timestamp = ?
-                        LIMIT 1`,
-                        [ nodeSessionId, p.time_stamp ],
-                        (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
-                    );
-                });
-
-                // insert only if its not there
-                if (!existingWeather) {
-                    await run(
-                        `INSERT INTO weather_instances
-                        (node_session_id, timestamp, temperature, humidity, pressure)
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [ nodeSessionId, p.time_stamp, p.temp, p.humid, p.b_pressure ]
-                    );
-                } else {
-                    console.log(
-                        `Skipping duplicate weather_instance: ` +
-                        `node_session_id=${nodeSessionId}, timestamp=${p.time_stamp}`
-                    );
-                }
-                break;
-            }
-
-            case 1: {
-                let nodeSessionId = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT node_session_id
-                         FROM node_sessions
-                         WHERE session_id = ?
-                         AND enclosure_id = ?
-                         ORDER BY activation_timestamp DESC
-                         LIMIT 1`,
-                        [ p.session_id, p.node_id ],
-                        (err, row) => err ? reject(err) : resolve(row && row.node_session_id)
-                    );
-                });
-
-                if (!nodeSessionId) {
-                    // must have a node_session before you can record a bird
-                    throw new Error(
-                        `No active node_session for session=${p.session_id} node=${p.node_id}`
-                    );
-                }
-                
-                // 1 try to find the latest weather at or before this bird
-                let weatherInstanceId = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT weather_instance_id
-                         FROM weather_instances
-                         WHERE node_session_id = ?
-                         AND timestamp <= ?
-                         ORDER BY timestamp DESC
-                         LIMIT 1`,
-                        [ nodeSessionId, p.time_stamp ],
-                        (err, row) => err ? reject(err) : resolve(row && row.weather_instance_id)
-                    );
-                });
-
-                // 2 if none found, fall back to the overall most-recent weather_instance
-                if (!weatherInstanceId) {
-                    console.warn(
-                        `No weather ≤ ${p.time_stamp}, ` +
-                        `falling back to most recent weather for node_session_id=${nodeSessionId}`
-                    );
-                    const fallbackRow = await new Promise((resolve, reject) => {
-                        db.get(
-                            `SELECT weather_instance_id
-                             FROM weather_instances
-                             WHERE node_session_id = ?
-                             ORDER BY timestamp DESC
-                             LIMIT 1`,
-                            [ nodeSessionId ],
-                            (err, row) => err ? reject(err) : resolve(row)
-                        );
-                    });
-                    weatherInstanceId = fallbackRow && fallbackRow.weather_instance_id;
-                }
-                // 3 still none? REAL error
-                if (!weatherInstanceId) {
-                    // must have a weather_instance before you can record a bird
-                    throw new Error(
-                        `No weather data at all for node_session_id=${nodeSessionId}`
-                    );
-                }
-
-                // insert the bird
-                const species = p.common_name || '';
-                const confidence = p.confidence_level != null ? p.confidence_level : 0;
                 await run(
-                    `INSERT INTO bird_instances
-                     (weather_instance_id, node_session_id, timestamp, species, confidence_level)
-                     VALUES (?, ?, ?, ?, ?)`,
-                    [ weatherInstanceId, nodeSessionId, p.time_stamp, species, confidence ]
+                    `INSERT INTO weather_instances (node_session_id, timestamp, temperature, humidity, pressure)
+                     VALUES (?, ?, ?, ?, ?)
+                     ON CONFLICT(node_session_id, timestamp) DO NOTHING`, // Prevents duplicates
+                    [nodeSession.node_session_id, p.time_stamp, p.temp, p.humid, p.b_pressure]
+                );
+                break;
+            }
+            case 1: { // Bird
+                const nodeSession = await get(`SELECT node_session_id FROM node_sessions WHERE session_id = ? ORDER BY activation_timestamp DESC LIMIT 1`, [session_id]);
+                if (!nodeSession) throw new Error(`Cannot log bird, no node_session exists for session_id ${session_id}`);
+
+                // --- MODIFIED LOGIC START ---
+
+                // 1. First, try to find the ideal weather instance (at or before the bird's timestamp)
+                let weatherInstance = await get(
+                    `SELECT weather_instance_id FROM weather_instances WHERE node_session_id = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1`,
+                    [nodeSession.node_session_id, p.time_stamp]
+                );
+                
+                // 2. If none was found, fall back to the absolute most recent weather instance for this session.
+                //    This makes the system resilient to small clock drifts.
+                if (!weatherInstance) {
+                    console.warn(`Could not find weather at or before ${p.time_stamp}. Falling back to most recent.`);
+                    weatherInstance = await get(
+                        `SELECT weather_instance_id FROM weather_instances WHERE node_session_id = ? ORDER BY timestamp DESC LIMIT 1`,
+                        [nodeSession.node_session_id]
+                    );
+                }
+
+                // 3. If there's STILL no weather data at all, then it's a real error.
+                if (!weatherInstance) {
+                    throw new Error(`Cannot log bird, no weather data found for node_session_id ${nodeSession.node_session_id}`);
+                }
+
+                // Define species and parse confidence from the label
+                const species = p.common_name || 'Unknown';
+                const confidenceLabel = p.confidence_label || '0%';
+                const confidence = parseInt(confidenceLabel.split('-')[0], 10); // Extracts the first number from "86-90%"
+
+                // Now run the insert with the corrected variables
+                await run(
+                    `INSERT INTO bird_instances (weather_instance_id, node_session_id, timestamp, species, confidence_level)
+                    VALUES (?, ?, ?, ?, ?)`,
+                    [weatherInstance.weather_instance_id, nodeSession.node_session_id, p.time_stamp, species, confidence]
                 );
                 break;
             }
@@ -218,8 +163,8 @@ app.post('/api/ingest', async (req, res) => {
                 throw new Error(`Unknown type: ${p.type}`);
         }
         res.json({ status: 'ok' });
-    }   catch (err) {
-        console.error('INGEST ERROR:', err);
+    } catch (err) {
+        console.error('INGEST ERROR:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -403,6 +348,48 @@ app.get('/account', async (req, res) => {
     } catch (err) {
         console.error('DB error on GET /account:', err);
         res.status(500).json({ success: false, message: 'DB error' });
+    }
+});
+
+app.put('/sessions/:id/close', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await run(
+            `UPDATE sessions SET closed_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
+            [id]
+        );
+        res.status(200).json({ success: true, message: 'Session closed.' });
+    } catch (err) {
+        console.error(`Error closing session ${id}:`, err.message);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.get('/sessions/:id/data', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Run all queries concurrently for better performance
+        const [sessionDetails, nodeSessions, weather, birds] = await Promise.all([
+            get(`SELECT session_id, p_name, p_date, closed_at FROM sessions WHERE session_id = ?`, [id]),
+            all(`SELECT * FROM node_sessions WHERE session_id = ? ORDER BY activation_timestamp`, [id]),
+            all(`SELECT w.* FROM weather_instances w JOIN node_sessions ns ON w.node_session_id = ns.node_session_id WHERE ns.session_id = ? ORDER BY w.timestamp`, [id]),
+            all(`SELECT b.* FROM bird_instances b JOIN node_sessions ns ON b.node_session_id = ns.node_session_id WHERE ns.session_id = ? ORDER BY b.timestamp`, [id])
+        ]);
+
+        if (!sessionDetails) {
+            return res.status(404).json({ message: 'Session not found' });
+        }
+
+        res.json({
+            details: sessionDetails,
+            nodes: nodeSessions,
+            weather: weather,
+            birds: birds
+        });
+
+    } catch (err) {
+        console.error(`Error fetching data for session ${id}:`, err);
+        res.status(500).json({ message: 'Error fetching session data.' });
     }
 });
 
