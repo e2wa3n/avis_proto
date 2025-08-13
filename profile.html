@@ -10,9 +10,24 @@
     </head>
     <body>
         <h1>My Profile</h1>
-
+        
         <p>Welcome, <strong><span id="user-name"></span></strong>, you are now signed in!</p>
         <p>Account created: <span id="member-since"></span></p>
+
+        <hr>
+
+        <h2>My Devices<h2>
+        <ul id="device-list">
+            </ul>
+        <h4>Register a New Device</h4>
+        <form id="register-device-form">
+            <label for="device-id">Device EUI:</label>
+            <input type="text" id="device-id" name="device-id" required placeholder="e.g., A840411234567890">
+            <button type="submit">Register Device</button>
+            <p id="device-message" style="color: red;"></p>
+        </form>
+
+        <hr>
 
         <button id="to_account_info">Account Info</button>
 

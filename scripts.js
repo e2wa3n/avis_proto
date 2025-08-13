@@ -200,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : '';
     }
     initSessionUI();
+    initDeviceUI();
 
     //display session name on session.html
     
@@ -393,4 +394,86 @@ async function initSessionUI() {
 
     //initial load
     loadSessions();
+}
+
+// --- DEVICE MANAGEMENT UI ---
+
+async function initDeviceUI() {
+    const deviceListEl = document.getElementById('device-list');
+    const deviceForm = document.getElementById('register-device-form');
+    const messageP = document.getElementById('device-message');
+    const accountId = localStorage.getItem('account_id');
+
+    // 1. Function to fetch and display the user's devices
+    async function loadAndDisplayDevices() {
+        if (!accountId || !deviceListEl) return;
+
+        // Clear the current list
+        deviceListEl.innerHTML = '<li>Loading...</li>';
+
+        try {
+            const response = await fetch(`/devices?account_id=${accountId}`);
+            if (!response.ok) {
+                throw new Error(`Server returned an error: ${response.statusText}`);
+            }
+            const devices = await response.json();
+
+            // Clear the "Loading..." message
+            deviceListEl.innerHTML = '';
+
+            if (devices.length === 0) {
+                deviceListEl.innerHTML = '<li>You have no registered devices.</li>';
+            } else {
+                devices.forEach(device => {
+                    const li = document.createElement('li');
+                    li.textContent = `Device EUI: ${device.devEUI}`;
+                    deviceListEl.appendChild(li);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to load devices:', err);
+            deviceListEl.innerHTML = '<li>Could not load devices.</li>';
+        }
+    }
+
+    // 2. Add event listener for the registration form
+    if (deviceForm) {
+        deviceForm.addEventListener('submit', async (evt) => {
+            evt.preventDefault();
+            messageP.textContent = ''; // Clear previous messages
+
+            const devEUI = document.getElementById('device-id').value.trim();
+            if (!devEUI) {
+                messageP.textContent = 'Device EUI cannot be empty.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/devices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        account_id: accountId,
+                        devEUI: devEUI
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    messageP.textContent = data.message || 'Error registering device.';
+                } else {
+                    alert('Device registered successfully!');
+                    deviceForm.reset(); // Clear the form input
+                    loadAndDisplayDevices(); // Refresh the list
+                }
+            } catch (err) {
+                console.error('Device registration fetch error:', err);
+                messageP.textContent = 'A network error occurred. Please try again.';
+            }
+        });
+    }
+
+    // 3. Initial load of devices when the page is ready
+    loadAndDisplayDevices();
 }
