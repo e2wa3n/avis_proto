@@ -346,12 +346,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initSessionUI() {
-    const listEl = document.getElementById('session-list');
-    const btn = document.getElementById('create-session-btn');
+    const sessionListEl = document.getElementById('session-list');
+    const createSessionForm = document.getElementById('create-session-form');
+    const deviceSelectEl = document.getElementById('session-device-select');
+    const sessionNameInput = document.getElementById('session-name-input');
     const accountId = localStorage.getItem('account_id');
 
+    // This function fetches existing SESSIONS and displays them in a list
     async function loadSessions() {
-        listEl.innerHTML = '';
+        if (!sessionListEl || !accountId) return;
+        sessionListEl.innerHTML = '';
         const res = await fetch(`/sessions?account_id=${accountId}`);
         const sessions = await res.json();
         sessions.forEach(p => {
@@ -364,7 +368,6 @@ async function initSessionUI() {
                 window.location.href = `/session.html?id=${p.id}`;
             });
 
-            //delete
             const delBtn = document.createElement('button');
             delBtn.textContent = 'Delete';
             delBtn.addEventListener('click', async () => {
@@ -375,25 +378,64 @@ async function initSessionUI() {
             });
 
             li.append(openBtn, delBtn);
-            listEl.append(li);
+            sessionListEl.append(li);
         });
     }
 
-    btn.addEventListener('click', async () => {
-        const name = prompt('Enter listening session name:');
-        if (!name) return;
-        await fetch('/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ account_id: accountId, name })
+    // This function fetches registered DEVICES and populates the dropdown
+    async function populateDeviceSelect() {
+        if (!deviceSelectEl || !accountId) return;
+        try {
+            const response = await fetch(`/devices?account_id=${accountId}`);
+            const devices = await response.json();
+            deviceSelectEl.innerHTML = ''; // Clear loading message
+
+            if (devices.length === 0) {
+                deviceSelectEl.innerHTML = '<option value="">--Please register a device first--</option>';
+            } else {
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.device_id;
+                    option.textContent = device.devEUI;
+                    deviceSelectEl.appendChild(option);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to populate devices:', err);
+        }
+    }
+
+    // Add event listener for the new session form
+    if (createSessionForm) {
+        createSessionForm.addEventListener('submit', async (evt) => {
+            evt.preventDefault();
+            const name = sessionNameInput.value.trim();
+            const deviceId = deviceSelectEl.value;
+
+            if (!name || !deviceId) {
+                alert('Please enter a session name and select a device.');
+                return;
+            }
+
+            await fetch('/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    account_id: accountId, 
+                    name: name,
+                    device_id: deviceId
+                })
+            });
+
+            // Reload the list of sessions to show the new one
+            loadSessions();
+            createSessionForm.reset(); // Clear the form
         });
+    }
 
-        //reload
-        loadSessions();
-    });
-
-    //initial load
+    // Initial data loads when the page is ready
     loadSessions();
+    populateDeviceSelect();
 }
 
 // --- DEVICE MANAGEMENT UI ---

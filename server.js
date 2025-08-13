@@ -311,17 +311,25 @@ app.get('/sessions', async (req, res) => {
 });
 
 app.post('/sessions', async (req, res) => {
-    // Note: We'll update this later to link a device
-    const { account_id, name } = req.body;
-    if (!account_id || !name) {
-        return res.status(400).json({ success: false, message: 'account_id and name are required' });
+    // It now expects a device_id along with the other data
+    const { account_id, name, device_id } = req.body;
+    if (!account_id || !name || !device_id) {
+        return res.status(400).json({ success: false, message: 'account_id, name, and device_id are required.' });
     }
     try {
-        const lastID = await run(
+        // Step 1: Create the main session entry
+        const sessionId = await run(
             'INSERT INTO sessions (account_id, p_name) VALUES (?, ?);',
             [account_id, name]
         );
-        res.status(201).json({ success: true, session_id: lastID });
+
+        // Step 2: Link the chosen device to this new session
+        await run(
+            'INSERT INTO session_devices (session_id, device_id) VALUES (?, ?);',
+            [sessionId, device_id]
+        );
+
+        res.status(201).json({ success: true, session_id: sessionId });
     } catch (err) {
         console.error('DB error on INSERT session:', err.message);
         res.status(500).json({ success: false, message: 'Internal Server Error' });

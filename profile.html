@@ -36,7 +36,21 @@
         <button id="change-pass-btn">Change Password</button>
         
         <!-- CRUD UI -->
-        <button id="create-session-btn">Create Listening Session</button>
+        <form id="create-session-form">
+            <h4>Create a New Listening Session</h4>
+            <div>
+                <label for="session-name">Session Name:</label>
+                <input type="text" id="session-name-input" required>
+            </div>
+            <div>
+                <label for="session-device-select">Select Device:</label>
+                <select id="session-device-select" required>
+                    <option value="">--Loading Devices--</option>
+                </select>
+            </div>
+            <button type="submit">Create Session</button>
+        </form>
+
         <ul id="session-list"></ul>
 
         <script src="scripts.js" defer></script>
