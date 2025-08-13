@@ -13,10 +13,14 @@ const { handleCreateAccount, handleSignIn, handleForgotPassword, handleUpdateAcc
 const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'users.db');
 const db = new sqlite3.Database(DB_PATH, err => {
-    if (err) console.error('Could not open users.db:', err.message);
+    if (err) {
+        console.error('Could not open users.db:', err.message);
+    } else {
+        db.run('PRAGMA foreign_keys = ON;');
+    }
 });
 
-const app = express();
+const app = express()
 app.use(express.json());
 
 const run = (sql, params = []) =>
@@ -24,6 +28,22 @@ const run = (sql, params = []) =>
         db.run(sql, params, function(err) {
             if (err) reject(err);
             else resolve(this.lastID);
+        });
+    });
+
+const get = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => {
+            if (err) reject (err);
+            else resolve(row);
+        });
+    });
+
+const all = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
         });
     });
 
@@ -199,6 +219,74 @@ app.post('/api/ingest', async (req, res) => {
     }   catch (err) {
         console.error('INGEST ERROR:', err);
         res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// --- DEVICE API ENDPOINTS ---
+
+// This endpoint registers a device and links it to a user.
+// The frontend will send a request here when the user fills out the "Register Device" form.
+app.post('/devices', async (req, res) => {
+    // 1. Get the account ID and device EUI from the request.
+    const { account_id, devEUI } = req.body;
+    if (!account_id || !devEUI) {
+        return res.status(400).json({ message: 'account_id and devEUI are required.' });
+    }
+
+    try {
+        // 2. Add the device to the main `devices` table.
+        // `INSERT OR IGNORE` means it won't crash if the device already exists.
+        await run(`INSERT OR IGNORE INTO devices (devEUI) VALUES (?)`, [devEUI]);
+        
+        // 3. Find the device's primary key (`device_id`).
+        const device = await get(`SELECT device_id FROM devices WHERE devEUI = ?`, [devEUI]);
+        if (!device) {
+            throw new Error('Failed to create or find device in the devices table.');
+        }
+
+        // 4. Create the link between the user and the device in the `user_devices` table.
+        await run(
+            `INSERT INTO user_devices (account_id, device_id) VALUES (?, ?)`,
+            [account_id, device.device_id]
+        );
+        
+        // 5. Send a success message back to the frontend.
+        res.status(201).json({ success: true, message: 'Device registered and linked successfully.' });
+
+    } catch (err) {
+        // This handles specific errors, like if the user tries to link the same device twice.
+        if (err.message.includes('UNIQUE constraint failed: user_devices.account_id, user_devices.device_id')) {
+            return res.status(409).json({ message: 'This device is already linked to your account.' });
+        }
+        // This handles any other unexpected errors.
+        console.error('Device registration error:', err.message);
+        res.status(500).json({ message: 'Server error during device registration.' });
+    }
+});
+
+// This endpoint gets all devices linked to a specific user.
+// The frontend will use this to show the user a list of their registered devices.
+app.get('/devices', async (req, res) => {
+    // 1. Get the user's account ID from the URL's query string (e.g., /devices?account_id=123)
+    const { account_id } = req.query;
+    if (!account_id) {
+        return res.status(400).json({ message: 'account_id is required.' });
+    }
+
+    try {
+        // 2. Run a database query to find all devices linked to this user.
+        // It JOINS three tables to connect accounts to devices via the user_devices table.
+        const devices = await all(
+            `SELECT d.device_id, d.devEUI, d.enclosureID FROM devices d
+             JOIN user_devices ud ON d.device_id = ud.device_id
+             WHERE ud.account_id = ?`,
+            [account_id]
+        );
+        // 3. Send the list of found devices back to the frontend as JSON.
+        res.json(devices);
+    } catch (err) {
+        console.error('Get devices error:', err.message);
+        res.status(500).json({ message: 'Server error fetching devices.' });
     }
 });
 
