@@ -22,6 +22,8 @@ const db = new sqlite3.Database(DB_PATH, err => {
 
 const app = express()
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing HTML form data
+app.use(express.static(__dirname)); // For serving index.html, styles.css, etc.
 
 const run = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -290,10 +292,113 @@ app.get('/devices', async (req, res) => {
     }
 });
 
-app.use((req, res) => server.emit('request', req, res));
+// SESSION API ENDPOINTS
+app.get('/sessions', async (req, res) => {
+    const { account_id } = req.query;
+    if (!account_id) {
+        return res.status(400).json({ success: false, message: 'account_id is required' });
+    }
+    try {
+        const rows = await all(
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE account_id = ?;',
+            [account_id]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('DB error on SELECT sessions:', err.message);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
 
-const PORT    = 3000;
-const WS_PORT = 35729;
+app.post('/sessions', async (req, res) => {
+    // Note: We'll update this later to link a device
+    const { account_id, name } = req.body;
+    if (!account_id || !name) {
+        return res.status(400).json({ success: false, message: 'account_id and name are required' });
+    }
+    try {
+        const lastID = await run(
+            'INSERT INTO sessions (account_id, p_name) VALUES (?, ?);',
+            [account_id, name]
+        );
+        res.status(201).json({ success: true, session_id: lastID });
+    } catch (err) {
+        console.error('DB error on INSERT session:', err.message);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.delete('/sessions/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await run('DELETE FROM sessions WHERE session_id = ?;', [id]);
+        res.status(204).end(); // 204 No Content is standard for a successful delete
+    } catch (err) {
+        console.error('DB error on DELETE sessions:', err.message);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.get('/sessions/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const row = await get(
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE session_id = ?;',
+            [id]
+        );
+        if (!row) {
+            return res.status(404).json({ success: false, message: 'Not Found' });
+        }
+        res.json(row);
+    } catch (err) {
+        console.error('DB error on SELECT session:', err.message);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// --- AUTHENTICATION & ACCOUNT ROUTES (Converted) ---
+app.post('/create-account', handleCreateAccount);
+app.post('/sign-in', handleSignIn);
+app.post('/forgot-password', handleForgotPassword);
+app.post('/update-account', handleUpdateAccount);
+
+app.post('/change-password', async (req, res) => {
+    const { username, password: newPassword } = req.body;
+    if (!username || !newPassword) {
+        return res.status(400).json({ success: false, message: 'Missing data' });
+    }
+    try {
+        const hash = await bcrypt.hash(newPassword, 10);
+        await run(
+            'UPDATE accounts SET password_hash = ? WHERE username = ?',
+            [hash, username]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('DB error on CHANGE-PASSWORD:', err.message);
+        res.status(500).json({ success: false, message: 'DB error' });
+    }
+});
+
+app.get('/account', async (req, res) => {
+    const { username } = req.query;
+    if (!username) {
+        return res.status(400).json({ success: false, message: 'username required' });
+    }
+    try {
+        const sql = 'SELECT id, username, first_name, last_name, email, date_created FROM accounts WHERE username = ?';
+        const row = await get(sql, [username]);
+        if (!row) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        res.json(row);
+    } catch (err) {
+        console.error('DB error on GET /account:', err);
+        res.status(500).json({ success: false, message: 'DB error' });
+    }
+});
+
+app.use((req, res) => server.emit('request', req, res));
 
 const mimeTypes = {
     '.html': 'text/html',
@@ -301,205 +406,17 @@ const mimeTypes = {
     '.js'  : 'application/javascript',
 };
 
-const server = http.createServer(async (req, res) => {
-    const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+const PORT = 3000;
+const WS_PORT = 35729;
+// Create the HTTP server from our Express app
+const server = http.createServer(app);
 
-    // — GET /sessions?account_id=...
-    if (req.method === 'GET' && urlObj.pathname === '/sessions') {
-        const accountId = urlObj.searchParams.get('account_id');
-        if (!accountId) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: false, message: 'account_id is required' }));
-        }
-        return db.all(
-            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE account_id = ?;',
-            [accountId],
-            (err, rows) => {
-                if (err) {
-                    console.error('DB error on SELECT sessions:', err.message);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify(rows));
-            }
-        );
-    }
-    
-    //app.use((req, res) => server.emit('request', req, res));
+// Attach the WebSocket server to the *same* HTTP server
+const wss = new WebSocket.Server({ server });
+console.log(`WebSocket server is running.`);
 
-    // — POST /sessions
-    if (req.method === 'POST' && urlObj.pathname === '/sessions') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => {
-            let payload;
-            try {
-                payload = JSON.parse(body);
-            } catch (e) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success:false, message: 'Invalid JSON' }));
-            }
-            const { account_id, name } = payload;
-            if (!account_id || !name) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'account_id and name are required' }));
-            }
-            db.run(
-                'INSERT INTO sessions (account_id, p_name) VALUES (?, ?);',
-                [account_id, name],
-                function(err) {
-                    if (err) {
-                        console.error('DB error on INSERT session:', err.message);
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
-                    }
-                    res.writeHead(201, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: true, session_id: this.lastID }));
-                }
-            );
-        });
-        return;
-    }
-
-    // — DELETE /sessions/:id
-    if (req.method === 'DELETE' && urlObj.pathname.startsWith('/sessions/')) {
-        const sessionId = urlObj.pathname.split('/')[2];
-        db.run(
-            'DELETE FROM sessions WHERE session_id = ?;',
-            [sessionId],
-            function(err) {
-                if (err) {
-                    console.error('DB error on DELETE sessions:', err.message);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
-                }
-                res.writeHead(204);
-                return res.end();
-            }
-        );
-        return;
-    }
-
-    // — Authentication routes
-    if (req.method === 'POST' && urlObj.pathname === '/create-account') {
-        return handleCreateAccount(req, res);
-    }
-    if (req.method === 'POST' && urlObj.pathname === '/sign-in') {
-        return handleSignIn(req, res);
-    }
-
-    // — Change Password route
-    if (req.method === 'POST' && urlObj.pathname === '/change-password') {
-        try {
-            const { username, password: newPassword } = await parseFormBody(req);
-            if (!username || !newPassword) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'Missing data' }));
-            }
-            const hash = await bcrypt.hash(newPassword, 10);
-            db.run(
-                'UPDATE accounts SET password_hash = ? WHERE username = ?',
-                [hash, username],
-                function(err) {
-                    if (err) {
-                        console.error('DB error on CHANGE-PASSWORD:', err.message);
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        return res.end(JSON.stringify({ success: false, message: 'DB error' }));
-                    }
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: true }));
-                }
-            );
-        } catch (err) {
-            console.error('Server error on CHANGE-PASSWORD:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: false, message: 'Server error' }));
-        }
-        return;
-    }
-
-    if (req.method === 'GET' && urlObj.pathname === '/account') {
-        const username = urlObj.searchParams.get('username');
-        if (!username) {
-            res.writeHead(400, {'Content-Type':'application/json'});
-            return res.end(JSON.stringify({success: false, message: 'username required' }));
-        }
-        const sql = 'SELECT username, first_name, last_name, email, date_created FROM accounts WHERE username = ?';
-        return db.get(sql, [username], (err, row) => {
-            if (err) {
-                console.error('DB error on GET /account:', err);
-                res.writeHead(500, {'Content-Type':'application/json'});
-                return res.end(JSON.stringify({success: false, message: 'DB error' }));
-            }
-            if (!row) {
-                res.writeHead(404, {'Content-Type':'application/json'});
-                    return res.end(JSON.stringify({sucess: false, message: 'DB error'}));
-            }
-            res.writeHead(200, {'Content-Type':'application/json'});
-            return res.end(JSON.stringify(row));
-        });
-    }
-
-    if (req.method === 'POST' && urlObj.pathname === '/update-account') {
-        return handleUpdateAccount(req, res);
-    }
-
-    // — GET /sessions/:id
-    if (req.method === 'GET' && /^\/sessions\/\d+$/.test(urlObj.pathname)) {
-        const sessionId = urlObj.pathname.split('/')[2];
-        return db.get(
-            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE session_id = ?;',
-            [sessionId],
-            (err, row) => {
-                if (err) {
-                    console.error('DB error on SELECT session:', err.message);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
-                }
-                if (!row) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: false, message: 'Not Found' }));
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify(row));
-            }
-        );
-    }
-
-    if (req.method === 'POST' && urlObj.pathname === '/forgot-password') {
-        return handleForgotPassword(req, res);
-    }
-
-    // — Static file serving
-    const pathname = urlObj.pathname;
-    const file     = pathname === '/' ? '/index.html' : pathname;
-    const filePath = path.join(__dirname, file);
-    const ext      = path.extname(filePath);
-
-    fs.readFile(filePath, (err, data) => {
-        if (err) {
-            res.writeHead(404);
-            return res.end('404 Not Found');
-        }
-        res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
-        return res.end(data);
-    });
+// Start the server
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP, ingest, and WebSocket)`);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP & ingest)`);
-});
-
-const wss = new WebSocket.Server({ port: WS_PORT });
-console.log(`WS: ws://localhost:${WS_PORT}`);
-
-const watcher = chokidar.watch(['./index.html','./styles.css','./scripts.js']);
-watcher.on('change', filePath => {
-    console.log(`File changed: ${filePath}, reloading browser...`);
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send('reload');
-        }
-    });
-});
