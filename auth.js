@@ -30,22 +30,8 @@ db.run(
     }
 );
 
-function parseFormBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => body += chunk.toString());
-        req.on('end', () => {
-            const params = new URLSearchParams(body);
-            const obj = {};
-            for (const [k, v] of params.entries()) obj[k] = v.trim();
-            resolve(obj);
-        });
-        req.on('error', reject);
-    });
-}
-
 async function handleCreateAccount(req, res) {
-    const { username, email, first_name, last_name, password } = await parseFormBody(req);
+    const { username, email, first_name, last_name, password } = req.body;
     console.log('Create-account body:', {username, email, first_name, last_name, password });
     try {
         if (!username || !password) {
@@ -118,7 +104,7 @@ async function handleCreateAccount(req, res) {
 
 async function handleSignIn(req, res) {
     try {
-        const { username, password } = await parseFormBody(req);
+        const { username, password } = req.body;
         if (!username || !password) {
             res.writeHead(400, {'Content-Type': 'application/json' });
             return res.end(
@@ -198,7 +184,7 @@ async function handleSignIn(req, res) {
 
 async function handleForgotPassword(req, res) {
   try {
-    const { username, first_name, last_name, email } = await parseFormBody(req);
+    const { username, first_name, last_name, email } = req.body;
     if (!username || !first_name || !last_name || !email) {
       res.writeHead(400, {'Content-Type':'application/json'});
       return res.end(JSON.stringify({ success: false, message: 'All fields are required' }));
@@ -238,7 +224,7 @@ async function handleUpdateAccount(req, res) {
         new_first_name,
         new_last_name,
         password
-    } = await parseFormBody(req);
+    } = req.body;
 
     // 1) Basic validation
     if (!username || !new_username || !new_email || !new_first_name || !new_last_name || !password) {
@@ -312,7 +298,6 @@ module.exports = {
     handleCreateAccount,
     handleSignIn,
     handleForgotPassword,
-    handleUpdateAccount,
-    parseFormBody
+    handleUpdateAccount
 };
 

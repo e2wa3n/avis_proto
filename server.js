@@ -398,8 +398,6 @@ app.get('/account', async (req, res) => {
     }
 });
 
-app.use((req, res) => server.emit('request', req, res));
-
 const mimeTypes = {
     '.html': 'text/html',
     '.css' : 'text/css',
