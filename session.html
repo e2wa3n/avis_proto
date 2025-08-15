@@ -1,26 +1,31 @@
-<!-- session.html -->
+<!doctype html>
 <html lang="en">
-    <head>
-        <meta charsets="UTF-8" />
-        <title>Avis Listeing Session</title>
-        <link rel="stylesheet" href="styles.css">
-        <link rel="icon" type="image/sng+xml" href="/assets/avis_logo5.svg">
-        <link rel="icon" type="image/png" href="/assets/avis_logo5.png" sizes="32x32">
-    </head>
-    <body>
-        <h1 id="session-name">Loading...</h1>
+<head>
+    <meta charset="UTF-8" />
+    <title>Avis Session</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="/assets/avis_logo5.svg">
+</head>
+<body>
+    <h1 id="session-name">Loading Session...</h1>
 
+    <div id="session-data-container">
         <h2>Session Data</h2>
-        <div id="gps-data"></div>
+        
+        <div id="gps-data">
+            </div>
+
         <h3>Weather Log</h3>
         <ul id="weather-log"></ul>
+        <div id="weather-controls"></div> 
         <h3>Bird Detections</h3>
         <ul id="bird-log"></ul>
+        <div id="bird-controls"></div> </div>
 
-        <button id="close-session-btn">End Session</button>
-
-        <button id="back-to-profile">Back</button>
-        
-        <script src="scripts.js" defer></script>
-    </body>
+    <hr>
+    <button id="close-session-btn">End Session</button>
+    <button id="back-to-profile">Back to Profile</button>
+    
+    <script src="scripts.js" defer></script>
+</body>
 </html>

@@ -535,43 +535,100 @@ async function initDeviceUI() {
 async function loadSessionData() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('id');
+    const sessionNameEl = document.getElementById('session-name');
 
     // Only run this logic if we are on a session page
     if (!sessionId || !document.getElementById('bird-log')) {
         return;
     }
 
-    const res = await fetch(`/sessions/${sessionId}/data`);
-    const data = await res.json();
+    try {
+        const res = await fetch(`/sessions/${sessionId}/data`);
+        if (!res.ok) {
+            // Throw an error if the network response was not successful
+            throw new Error(`Failed to fetch data: ${res.status} ${res.statusText}`);
+        }
+        const data = await res.json();
+        
+        // Update session name from the detailed data fetch
+        if(data.details && sessionNameEl) {
+            sessionNameEl.textContent = data.details.p_name;
+            document.title = data.details.p_name;
+        }
 
-    // Render GPS Data
-    const gpsContainer = document.getElementById('gps-data');
-    if (data.nodes.length > 0) {
-        const node = data.nodes[0]; // Assuming one node per session for now
-        gpsContainer.innerHTML = `
-            <h4>Node Location</h4>
-            <p>Latitude: ${node.lat}, Longitude: ${node.lng}, Altitude: ${node.altitude}</p>
-        `;
+        // Render GPS Data
+        const gpsContainer = document.getElementById('gps-data');
+        if (data.nodes && data.nodes.length > 0) {
+            const node = data.nodes[0];
+            gpsContainer.innerHTML = `
+                <h3>Node Location</h3>
+                <p>Latitude: ${node.lat}, Longitude: ${node.lng}, Altitude: ${node.altitude}</p>
+            `;
+        }
+
+        // Render Weather Data
+        setupShowMoreLess('weather-log', 'weather-controls', data.weather, (w) => {
+            const li = document.createElement('li');
+            const d = new Date(w.timestamp).toLocaleString();
+            const tempC = w.temperature;
+            const tempF = Math.round((tempC * 9/5) + 32);
+            li.textContent = `${d}: Temp: ${tempF}°F, Humidity: ${w.humidity}%, Pressure: ${w.pressure} inHg`;
+            return li;
+        });
+
+        // Render Bird Data
+        setupShowMoreLess('bird-log', 'bird-controls', data.birds, (b) => {
+            const li = document.createElement('li');
+            const d = new Date(b.timestamp).toLocaleString();
+            const confidenceText = b.confidence_level ? `${b.confidence_level}%` : 'N/A';
+            li.textContent = `${d}: ${b.species} (Confidence: ${confidenceText})`;
+            return li;
+        });
+
+    } catch (err) {
+        // If anything in the 'try' block fails, this code will run
+        console.error('Error loading session data:', err);
+        if (sessionNameEl) {
+            sessionNameEl.textContent = 'Error: Could not load session data.';
+        }
+    }
+}
+
+function setupShowMoreLess(listElementId, controlsElementId, allItems, renderItem) {
+    const listEl = document.getElementById(listElementId);
+    const controlsEl = document.getElementById(controlsElementId);
+    let isShowingAll = false;
+
+    // Clear any previous content
+    listEl.innerHTML = '';
+    controlsEl.innerHTML = '';
+
+    // Create a reversed copy of the items to always show newest first
+    const reversedItems = [...allItems].reverse();
+
+    if (reversedItems.length <= 15) {
+        // If 15 or fewer items, just render them all and we're done
+        reversedItems.forEach(item => listEl.appendChild(renderItem(item)));
+        return;
     }
 
-    // Render Weather Data
-    const weatherLog = document.getElementById('weather-log');
-    weatherLog.innerHTML = ''; // Clear
-    data.weather.forEach(w => {
-        const li = document.createElement('li');
-        const d = new Date(w.timestamp).toLocaleString();
-        li.textContent = `${d}: Temp: ${w.temperature}F, Humidity: ${w.humidity}%, Pressure: ${w.pressure} inHg`;
-        weatherLog.appendChild(li);
+    // If more than 15 items, create the button and render logic
+    const showMoreBtn = document.createElement('button');
+    controlsEl.appendChild(showMoreBtn);
+
+    const render = () => {
+        listEl.innerHTML = '';
+        const itemsToRender = isShowingAll ? reversedItems : reversedItems.slice(0, 15); // Get all or the first 15 of the reversed list
+        
+        itemsToRender.forEach(item => listEl.appendChild(renderItem(item)));
+        
+        showMoreBtn.textContent = isShowingAll ? 'Show Less' : 'Show More';
+    };
+
+    showMoreBtn.addEventListener('click', () => {
+        isShowingAll = !isShowingAll; // Flip the state
+        render();
     });
 
-    // Render Bird Data
-    const birdLog = document.getElementById('bird-log');
-    birdLog.innerHTML = ''; // Clear
-    data.birds.forEach(b => {
-        const li = document.createElement('li');
-        const d = new Date(b.timestamp).toLocaleString();
-        const confidenceText = b.confidence_level ? `${b.confidence_level}%` : 'N/A';
-        li.textContent = `${d}: ${b.species} (Confidence: ${confidenceText})`;
-        birdLog.appendChild(li);
-    });
+    render(); // Initial render
 }
