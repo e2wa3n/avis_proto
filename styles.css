@@ -1,0 +1,36 @@
+/* styles.css */
+
+
+/* Tab container styling */
+.tab-buttons {
+    border-bottom: 2px solid #ccc;
+    margin-bottom: 1rem;
+}
+
+/* Individual tab button styling */
+.tab-btn {
+    padding: 10px 20px;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    background-color: #f1f1f1;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+}
+
+/* Styling for the active tab button */
+.tab-btn.active {
+    background-color: #fff;
+    border-bottom: 2px solid #fff;
+    margin-bottom: -2px; /* Lifts the tab to cover the container border */
+}
+
+/* Hide tab content panels by default */
+.tab-panel {
+    display: none;
+}
+
+/* Show the active tab content panel */
+.tab-panel.active {
+    display: block;
+}

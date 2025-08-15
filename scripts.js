@@ -201,6 +201,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initSessionUI();
     initDeviceUI();
+    loadSessionData();
+    initTabs();
 
     //display session name on session.html
     
@@ -354,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    loadSessionData();
 });
 
 async function initSessionUI() {
@@ -631,4 +632,29 @@ function setupShowMoreLess(listElementId, controlsElementId, allItems, renderIte
     });
 
     render(); // Initial render
+}
+
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    // Only run if there are tabs on the page
+    if (tabButtons.length === 0) return;
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Get the target tab panel's ID from the button's data attribute
+            const targetTabId = button.dataset.tab;
+
+            // Remove 'active' class from all buttons and panels
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabPanels.forEach(panel => panel.classList.remove('active'));
+
+            // Add 'active' class to the clicked button
+            button.classList.add('active');
+            
+            // Add 'active' class to the corresponding panel to show it
+            document.getElementById(targetTabId).classList.add('active');
+        });
+    });
 }
