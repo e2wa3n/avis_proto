@@ -1,6 +1,6 @@
 // scripts.js
 
-const socket = new WebSocket('ws://localhost:35729');
+const socket = new WebSocket('ws://localhost:3000');
 socket.addEventListener('message', () => {
     location.reload();
 });
