@@ -1,3 +1,4 @@
+<!-- session.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -5,6 +6,8 @@
     <title>Avis Session</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/svg+xml" href="/assets/avis_logo5.svg">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <h1 id="session-name">Loading Session...</h1>
@@ -40,7 +43,7 @@
         <!-- Weather Graph Tab -->
         <div id="weather-graph" class="tab-panel">
             <h2>Weather Data Graph</h2>
-            <p><em>Weather graph will be implemented here.</em></p>
+            <canvas id="weatherChart"></canvas>
         </div>
 
         <!-- Bird Info Tab -->

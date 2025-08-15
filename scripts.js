@@ -1,6 +1,9 @@
 // scripts.js
 
 const socket = new WebSocket('ws://localhost:3000');
+let weatherChartInstance = null; //variable for weather graph
+let sessionData = null;
+
 socket.addEventListener('message', () => {
     location.reload();
 });
@@ -204,31 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSessionData();
     initTabs();
 
-    //display session name on session.html
-    
-    const projNameEl = document.getElementById('session-name');
-    if (projNameEl) {
-        const params = new URLSearchParams(window.location.search);
-        const projId = params.get('id');
-        if (!projId) {
-            projNameEl.textContent = 'No session specified';
-        }   else {
-            fetch(`/sessions/${projId}`)
-                .then(res => {
-                    if (!res.ok) throw new Error(res.status);
-                    return res.json();
-                })
-                .then(proj => {
-                    projNameEl.textContent = proj.name;
-                    document.title = proj.name;
-                })
-                .catch(err => {
-                    console.error('Could not load session', err);
-                    projNameEl.textContent = 'Error loading session';
-                })
-        }
-    }
-
     //back button on session.html
 
     const backBtn = document.getElementById('back-to-profile');
@@ -366,33 +344,40 @@ async function initSessionUI() {
     const accountId = localStorage.getItem('account_id');
 
     // This function fetches existing SESSIONS and displays them in a list
-    async function loadSessions() {
-        if (!sessionListEl || !accountId) return;
-        sessionListEl.innerHTML = '';
-        const res = await fetch(`/sessions?account_id=${accountId}`);
-        const sessions = await res.json();
-        sessions.forEach(p => {
-            const li = document.createElement('li');
-            li.textContent = p.name;
-            
-            const openBtn = document.createElement('button');
-            openBtn.textContent = 'Open';
-            openBtn.addEventListener('click', () => {
-                window.location.href = `/session.html?id=${p.id}`;
-            });
+    async function loadSessionData() {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('id');
+        const sessionNameEl = document.getElementById('session-name');
 
-            const delBtn = document.createElement('button');
-            delBtn.textContent = 'Delete';
-            delBtn.addEventListener('click', async () => {
-                const ok = confirm('Are you sure you want to delete this session? This action is permanent.');
-                if (!ok) return;
-                await fetch(`/sessions/${p.id}`, {method: 'DELETE' });
-                loadSessions();
-            });
+        if (!sessionId || !document.getElementById('bird-log')) {
+            return; // Exit if not on a session page
+        }
 
-            li.append(openBtn, delBtn);
-            sessionListEl.append(li);
-        });
+        try {
+            const res = await fetch(`/sessions/${sessionId}/data`);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch data: ${res.status} ${res.statusText}`);
+            }
+            const data = await res.json();
+        
+            // 1. Store the data globally
+            sessionData = data;
+        
+            // 2. Update the page title
+            if(data.details && sessionNameEl) {
+                sessionNameEl.textContent = data.details.p_name;
+                document.title = data.details.p_name;
+            }
+
+            // 3. Render all the raw data for the first tab
+            renderAllData(sessionData);
+
+        } catch (err) {
+            console.error('Error loading session data:', err);
+            if (sessionNameEl) {
+                sessionNameEl.textContent = 'Error: Could not load session data.';
+            }
+        }
     }
 
     // This function fetches registered DEVICES and populates the dropdown
@@ -413,6 +398,7 @@ async function initSessionUI() {
                     deviceSelectEl.appendChild(option);
                 });
             }
+
         } catch (err) {
             console.error('Failed to populate devices:', err);
         }
@@ -595,6 +581,37 @@ async function loadSessionData() {
     }
 }
 
+function renderAllData(data) {
+    // Render GPS Data
+    const gpsContainer = document.getElementById('gps-data');
+    if (data.nodes && data.nodes.length > 0) {
+        const node = data.nodes[0];
+        gpsContainer.innerHTML = `
+            <h3>Node Location</h3>
+            <p>Latitude: ${node.lat}, Longitude: ${node.lng}, Altitude: ${node.altitude}</p>
+        `;
+    }
+
+    // Render Weather Data List
+    setupShowMoreLess('weather-log', 'weather-controls', data.weather, (w) => {
+        const li = document.createElement('li');
+        const d = new Date(w.timestamp).toLocaleString();
+        const tempC = w.temperature;
+        const tempF = Math.round((tempC * 9/5) + 32);
+        li.textContent = `${d}: Temp: ${tempF}°F, Humidity: ${w.humidity}%, Pressure: ${w.pressure} inHg`;
+        return li;
+    });
+
+    // Render Bird Data List
+    setupShowMoreLess('bird-log', 'bird-controls', data.birds, (b) => {
+        const li = document.createElement('li');
+        const d = new Date(b.timestamp).toLocaleString();
+        const confidenceText = b.confidence_level ? `${b.confidence_level}%` : 'N/A';
+        li.textContent = `${d}: ${b.species} (Confidence: ${confidenceText})`;
+        return li;
+    });
+}
+
 function setupShowMoreLess(listElementId, controlsElementId, allItems, renderItem) {
     const listEl = document.getElementById(listElementId);
     const controlsEl = document.getElementById(controlsElementId);
@@ -637,24 +654,72 @@ function setupShowMoreLess(listElementId, controlsElementId, allItems, renderIte
 function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
+    let isChartRendered = false; // Add a flag to prevent re-drawing
 
-    // Only run if there are tabs on the page
     if (tabButtons.length === 0) return;
 
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
-            // Get the target tab panel's ID from the button's data attribute
             const targetTabId = button.dataset.tab;
 
-            // Remove 'active' class from all buttons and panels
+            // --- NEW LOGIC IS HERE ---
+            // If the weather tab is clicked and the chart hasn't been drawn yet
+            if (targetTabId === 'weather-graph' && !isChartRendered && sessionData) {
+                renderWeatherChart(sessionData.weather);
+                isChartRendered = true; // Set the flag so it doesn't draw again
+            }
+            // --- END OF NEW LOGIC ---
+
             tabButtons.forEach(btn => btn.classList.remove('active'));
             tabPanels.forEach(panel => panel.classList.remove('active'));
 
-            // Add 'active' class to the clicked button
             button.classList.add('active');
-            
-            // Add 'active' class to the corresponding panel to show it
             document.getElementById(targetTabId).classList.add('active');
         });
+    });
+}
+
+function renderWeatherChart(weatherData) {
+    const ctx = document.getElementById('weatherChart');
+    if (!ctx) return; // Exit if the canvas element isn't on the page
+
+    // Destroy the previous chart instance if it exists
+    if (weatherChartInstance) {
+        weatherChartInstance.destroy();
+    }
+
+    // 1. Format the data for Chart.js
+    const labels = weatherData.map(w => new Date(w.timestamp).toLocaleTimeString());
+    const tempData = weatherData.map(w => Math.round((w.temperature * 9/5) + 32));
+    const humidityData = weatherData.map(w => w.humidity);
+
+    // 2. Create the chart
+    weatherChartInstance = new Chart(ctx, {
+        type: 'line', // We want a line graph
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Temperature (°F)',
+                    data: tempData,
+                    borderColor: 'rgba(255, 99, 132, 1)', // Red
+                    tension: 0.1
+                },
+                {
+                    label: 'Humidity (%)',
+                    data: humidityData,
+                    borderColor: 'rgba(54, 162, 235, 1)', // Blue
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
     });
 }
