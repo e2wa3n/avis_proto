@@ -299,6 +299,14 @@ app.get('/sessions/:id', async (req, res) => {
             'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE session_id = ?;',
             [id]
         );
+
+        //bug finders
+        console.log(`--- SERVER DATA FETCH ---`);
+        console.log(`Fetching data for Session ID: ${id}`);
+        console.log(`Weather records found in DB: ${weather.length}`);
+        console.log(`-------------------------`);
+        //bug finders
+
         if (!row) {
             return res.status(404).json({ success: false, message: 'Not Found' });
         }

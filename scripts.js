@@ -649,25 +649,20 @@ function initTabs() {
 }
 
 function renderWeatherChart(weatherData) {
-
-    console.log('Checkpoint 3: renderWeatherChart was called with data:', weatherData); //bug finder 3
-
     const ctx = document.getElementById('weatherChart');
     if (!ctx) return; // Exit if the canvas element isn't on the page
 
-    // Destroy the previous chart instance if it exists
     if (weatherChartInstance) {
         weatherChartInstance.destroy();
     }
 
-    // 1. Format the data for Chart.js
     const labels = weatherData.map(w => new Date(w.timestamp).toLocaleTimeString());
     const tempData = weatherData.map(w => Math.round((w.temperature * 9/5) + 32));
     const humidityData = weatherData.map(w => w.humidity);
+    const pressureData = weatherData.map(w => w.pressure);
 
-    // 2. Create the chart
     weatherChartInstance = new Chart(ctx, {
-        type: 'line', // We want a line graph
+        type: 'line',
         data: {
             labels: labels,
             datasets: [
@@ -675,12 +670,21 @@ function renderWeatherChart(weatherData) {
                     label: 'Temperature (°F)',
                     data: tempData,
                     borderColor: 'rgba(255, 99, 132, 1)', // Red
+                    yAxisID: 'yTemp',
                     tension: 0.1
                 },
                 {
                     label: 'Humidity (%)',
                     data: humidityData,
                     borderColor: 'rgba(54, 162, 235, 1)', // Blue
+                    yAxisID: 'yHumidity',
+                    tension: 0.1
+                },
+                {
+                    label: 'Raw Pressure Reading',
+                    data: pressureData,
+                    borderColor: 'rgba(75, 192, 192, 1)', // Teal
+                    yAxisID: 'yPressure',
                     tension: 0.1
                 }
             ]
@@ -688,8 +692,44 @@ function renderWeatherChart(weatherData) {
         options: {
             responsive: true,
             scales: {
-                y: {
-                    beginAtZero: false
+                yTemp: {
+                    type: 'linear',
+                    position: 'left',
+                    ticks: { color: 'rgba(255, 99, 132, 1)' },
+                    // NEW: Add padding to this axis
+                    afterDataLimits: (axis) => {
+                        const range = axis.max - axis.min;
+                        const padding = range * 0.1; // Add 10% padding
+                        axis.max = axis.max + padding;
+                        axis.min = axis.min - padding;
+                    }
+                },
+                yHumidity: {
+                    type: 'linear',
+                    position: 'left',
+                    min: 0,
+                    max: 100,
+                    ticks: { color: 'rgba(54, 162, 235, 1)' },
+                     // NEW: Add padding to this axis
+                    afterDataLimits: (axis) => {
+                        const range = axis.max - axis.min;
+                        const padding = range * 0.1; // Add 10% padding
+                        axis.max = axis.max + padding;
+                        axis.min = axis.min - padding;
+                    }
+                },
+                yPressure: {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: 'rgba(75, 192, 192, 1)' },
+                     // NEW: Add padding to this axis
+                    afterDataLimits: (axis) => {
+                        const range = axis.max - axis.min;
+                        const padding = range * 0.1; // Add 10% padding
+                        axis.max = axis.max + padding;
+                        axis.min = axis.min - padding;
+                    }
                 }
             }
         }
