@@ -344,40 +344,33 @@ async function initSessionUI() {
     const accountId = localStorage.getItem('account_id');
 
     // This function fetches existing SESSIONS and displays them in a list
-    async function loadSessionData() {
-        const params = new URLSearchParams(window.location.search);
-        const sessionId = params.get('id');
-        const sessionNameEl = document.getElementById('session-name');
+    async function loadAndDisplaySessions() {
+        if (!sessionListEl || !accountId) return;
+        sessionListEl.innerHTML = '';
+        const res = await fetch(`/sessions?account_id=${accountId}`);
+        const sessions = await res.json();
+        sessions.forEach(p => {
+            const li = document.createElement('li');
+            li.textContent = p.name;
+            
+            const openBtn = document.createElement('button');
+            openBtn.textContent = 'Open';
+            openBtn.addEventListener('click', () => {
+                window.location.href = `/session.html?id=${p.id}`;
+            });
 
-        if (!sessionId || !document.getElementById('bird-log')) {
-            return; // Exit if not on a session page
-        }
+            const delBtn = document.createElement('button');
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', async () => {
+                const ok = confirm('Are you sure you want to delete this session? This action is permanent.');
+                if (!ok) return;
+                await fetch(`/sessions/${p.id}`, {method: 'DELETE' });
+                loadAndDisplaySessions(); // Reload the list after deleting
+            });
 
-        try {
-            const res = await fetch(`/sessions/${sessionId}/data`);
-            if (!res.ok) {
-                throw new Error(`Failed to fetch data: ${res.status} ${res.statusText}`);
-            }
-            const data = await res.json();
-        
-            // 1. Store the data globally
-            sessionData = data;
-        
-            // 2. Update the page title
-            if(data.details && sessionNameEl) {
-                sessionNameEl.textContent = data.details.p_name;
-                document.title = data.details.p_name;
-            }
-
-            // 3. Render all the raw data for the first tab
-            renderAllData(sessionData);
-
-        } catch (err) {
-            console.error('Error loading session data:', err);
-            if (sessionNameEl) {
-                sessionNameEl.textContent = 'Error: Could not load session data.';
-            }
-        }
+            li.append(openBtn, delBtn);
+            sessionListEl.append(li);
+        });
     }
 
     // This function fetches registered DEVICES and populates the dropdown
@@ -398,7 +391,6 @@ async function initSessionUI() {
                     deviceSelectEl.appendChild(option);
                 });
             }
-
         } catch (err) {
             console.error('Failed to populate devices:', err);
         }
@@ -427,13 +419,13 @@ async function initSessionUI() {
             });
 
             // Reload the list of sessions to show the new one
-            loadSessions();
+            loadAndDisplaySessions();
             createSessionForm.reset(); // Clear the form
         });
     }
 
     // Initial data loads when the page is ready
-    loadSessions();
+    loadAndDisplaySessions();
     populateDeviceSelect();
 }
 
@@ -524,56 +516,31 @@ async function loadSessionData() {
     const sessionId = params.get('id');
     const sessionNameEl = document.getElementById('session-name');
 
-    // Only run this logic if we are on a session page
     if (!sessionId || !document.getElementById('bird-log')) {
-        return;
+        return; // Exit if not on a session page
     }
 
     try {
         const res = await fetch(`/sessions/${sessionId}/data`);
         if (!res.ok) {
-            // Throw an error if the network response was not successful
             throw new Error(`Failed to fetch data: ${res.status} ${res.statusText}`);
         }
         const data = await res.json();
         
-        // Update session name from the detailed data fetch
+        // 1. Store the data globally for the chart to use later
+        sessionData = data;
+        console.log('Checkpoint 1: Session data loaded and stored.', sessionData);
+        
+        // 2. Update the page title
         if(data.details && sessionNameEl) {
             sessionNameEl.textContent = data.details.p_name;
             document.title = data.details.p_name;
         }
 
-        // Render GPS Data
-        const gpsContainer = document.getElementById('gps-data');
-        if (data.nodes && data.nodes.length > 0) {
-            const node = data.nodes[0];
-            gpsContainer.innerHTML = `
-                <h3>Node Location</h3>
-                <p>Latitude: ${node.lat}, Longitude: ${node.lng}, Altitude: ${node.altitude}</p>
-            `;
-        }
-
-        // Render Weather Data
-        setupShowMoreLess('weather-log', 'weather-controls', data.weather, (w) => {
-            const li = document.createElement('li');
-            const d = new Date(w.timestamp).toLocaleString();
-            const tempC = w.temperature;
-            const tempF = Math.round((tempC * 9/5) + 32);
-            li.textContent = `${d}: Temp: ${tempF}°F, Humidity: ${w.humidity}%, Pressure: ${w.pressure} inHg`;
-            return li;
-        });
-
-        // Render Bird Data
-        setupShowMoreLess('bird-log', 'bird-controls', data.birds, (b) => {
-            const li = document.createElement('li');
-            const d = new Date(b.timestamp).toLocaleString();
-            const confidenceText = b.confidence_level ? `${b.confidence_level}%` : 'N/A';
-            li.textContent = `${d}: ${b.species} (Confidence: ${confidenceText})`;
-            return li;
-        });
+        // 3. Render all the raw data for the first tab
+        renderAllData(sessionData);
 
     } catch (err) {
-        // If anything in the 'try' block fails, this code will run
         console.error('Error loading session data:', err);
         if (sessionNameEl) {
             sessionNameEl.textContent = 'Error: Could not load session data.';
@@ -662,6 +629,8 @@ function initTabs() {
         button.addEventListener('click', () => {
             const targetTabId = button.dataset.tab;
 
+            console.log(`Checkpoint 2: Tab clicked. Target: ${targetTabId}, Chart Rendered: ${isChartRendered}, sessionData available: ${!!sessionData}`); //bug finder 2
+
             // --- NEW LOGIC IS HERE ---
             // If the weather tab is clicked and the chart hasn't been drawn yet
             if (targetTabId === 'weather-graph' && !isChartRendered && sessionData) {
@@ -680,6 +649,9 @@ function initTabs() {
 }
 
 function renderWeatherChart(weatherData) {
+
+    console.log('Checkpoint 3: renderWeatherChart was called with data:', weatherData); //bug finder 3
+
     const ctx = document.getElementById('weatherChart');
     if (!ctx) return; // Exit if the canvas element isn't on the page
 
