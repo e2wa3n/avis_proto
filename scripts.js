@@ -537,6 +537,20 @@ async function loadSessionData() {
             document.title = data.details.p_name;
         }
 
+        if (data.details && data.details.closed_at) {
+            // This code runs if the session IS closed
+            const statusDiv = document.getElementById('session-status');
+            const endSessionBtn = document.getElementById('close-session-btn');
+
+            if (statusDiv) {
+                statusDiv.textContent = 'This session has ended and the data is read-only.';
+                statusDiv.classList.add('session-closed-message');
+            }
+            if (endSessionBtn) {
+                endSessionBtn.style.display = 'none'; // Hide the button
+            }
+        }
+
         // 3. Render all the raw data for the first tab
         renderAllData(sessionData);
 
@@ -735,3 +749,4 @@ function renderWeatherChart(weatherData) {
         }
     });
 }
+

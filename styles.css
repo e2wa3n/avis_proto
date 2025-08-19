@@ -34,3 +34,14 @@
 .tab-panel.active {
     display: block;
 }
+
+.session-closed-message {
+    color: #990000;
+    font-weight: bold;
+    font-size: 1.2em;
+    margin: 1rem 0;
+    padding: 10px;
+    border: 1px solid #ffb3b3;
+    border-radius: 5px;
+    background-color: #ffe5e5;
+}
