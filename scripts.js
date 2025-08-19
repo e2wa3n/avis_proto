@@ -370,6 +370,13 @@ async function initSessionUI() {
 
             li.append(openBtn, delBtn);
             sessionListEl.append(li);
+
+            if (p.closed_at) {
+                const statusSpan = document.createElement('span');
+                statusSpan.textContent = ' (Closed)';
+                statusSpan.classList.add('session-status-closed');
+                li.appendChild(statusSpan);
+            }
         });
     }
 

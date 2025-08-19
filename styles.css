@@ -45,3 +45,9 @@
     border-radius: 5px;
     background-color: #ffe5e5;
 }
+
+.session-status-closed {
+    color: #990000; /* A muted gray color */
+    font-style: italic;
+    font-size: 0.9em;
+}

@@ -245,7 +245,7 @@ app.get('/sessions', async (req, res) => {
     }
     try {
         const rows = await all(
-            'SELECT session_id AS id, p_name AS name, p_date AS date_created FROM sessions WHERE account_id = ?;',
+            'SELECT session_id AS id, p_name AS name, p_date AS date_created, closed_at FROM sessions WHERE account_id = ?;',
             [account_id]
         );
         res.json(rows);
