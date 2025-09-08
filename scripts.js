@@ -712,6 +712,7 @@ function renderWeatherChart(weatherData) {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             scales: {
                 yTemp: {
                     type: 'linear',

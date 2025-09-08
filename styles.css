@@ -51,3 +51,11 @@
     font-style: italic;
     font-size: 0.9em;
 }
+
+.chart-container {
+  position: relative;
+  margin: auto;
+  height: 60vh;  /* 60% of the viewport height */
+  width: 80vw;   /* 80% of the viewport width */
+  max-width: 1000px; /* Optional: prevents it from getting too wide on large screens */
+}
