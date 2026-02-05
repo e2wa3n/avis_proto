@@ -31,115 +31,66 @@ db.run(
     }
 );
 
+// 1. VULNERABLE CREATE ACCOUNT (Stops hashing passwords)
 async function handleCreateAccount(req, res) {
     const { username, email, first_name, last_name, password } = req.body;
     console.log('Create-account body:', {username, email, first_name, last_name, password });
+    
     try {
-        if (!username || !password) {
+        if (!username || !password || !email) {
             res.writeHead(400, {'Content-Type': 'application/json' });
-            return res.end(
-                JSON.stringify({
-                    success: false,
-                    message: 'Username and password are required'
-                })
-            );
+            return res.end(JSON.stringify({ success: false, message: 'All fields required' }));
         }
 
-        if (!email) {
-            res.writeHead(400, {'Content-Type':'application/json'});
-            return res.end(JSON.stringify({
-                success: false,
-                message: 'Email is required'
-            }));
-        }
-
-        const saltRounds = 10;
-        const passwordHash = await bcrypt.hash(password, saltRounds);
+        // ❌ VULNERABILITY: Storing password in PLAIN TEXT (No bcrypt)
+        // Ideally we would hash this, but we are removing it to demonstrate the SQLi impact easier.
+        const passwordPlain = password; 
 
         const stmt = db.prepare(
             `INSERT INTO accounts (username, email, first_name, last_name, password_hash) 
-                VALUES (?, ?, ?, ?, ?);`
+             VALUES (?, ?, ?, ?, ?);`
         );
 
-        stmt.run(username, email, first_name, last_name, passwordHash, function (err) {
+        stmt.run(username, email, first_name, last_name, passwordPlain, function (err) {
             if (err) {
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    const msg = /accounts\.username/.test(err.message)
-                        ? 'That username is already taken'
-                        : /accounts\.email/.test(err.message)
-                            ? 'That email is already registered'
-                            : 'That username or email is already in use';
-                    res.writeHead(409, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({
-                        success: false,
-                        message: msg
-                    }));
-                }
-
-
                 console.error('DB error on INSERT:', err.message);
                 res.writeHead(500, {'Content-Type': 'application/json' });
-                return res.end(
-                    JSON.stringify({
-                        success: false,
-                        message: 'Internal Server Error'
-                    })
-                );
+                return res.end(JSON.stringify({ success: false, message: 'Error creating account' }));
             }
-
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true }));
         });
         stmt.finalize();
-    }   catch (err) {
+
+    } catch (err) {
         console.error('Error in handleCreateAccount:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        return res.end(
-            JSON.stringify({
-                success: false,
-                message: 'Internal Server Error'
-            })
-        );
+        res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
     }
 }
 
-// ------vulnerable code in handleSignIn() ---------
-
+// 2. VULNERABLE SIGN IN (Checks password in SQL string)
 async function handleSignIn(req, res) {
     try {
         const { username, password } = req.body;
-        
-        // 1. Basic Validation (This is fine to keep)
         if (!username || !password) {
             res.writeHead(400, {'Content-Type': 'application/json' });
-            return res.end(
-                JSON.stringify({
-                    success: false,
-                    message: 'Username and password are required'
-                })
-            );
+            return res.end(JSON.stringify({ success: false, message: 'Missing credentials' }));
         }
 
-        // 2. THE VULNERABLE QUERY
-        // ❌ WEAKNESS: Direct string concatenation allows SQL injection
-        const query = `SELECT id AS account_id, 
-                              password_hash, 
-                              date_created, 
-                              first_name, 
-                              last_name, 
-                              email 
-                       FROM accounts 
-                       WHERE username = '${username}'`;
-        
-        // (Optional) Log the query to the terminal so the class can see the injection happening
-        console.log(`Executing SQL Query: ${query}`);
+        // ❌ VULNERABILITY: SQL Injection + Insecure Authentication Logic
+        // We are checking the password INSIDE the query string.
+        const query = `SELECT * FROM accounts 
+                       WHERE username = '${username}' 
+                       AND password_hash = '${password}'`;
 
-        // 3. Execute the query without parameters
-        db.get(query, async (err, row) => {
+        console.log(`[SQLi DEMO] Executing Query: ${query}`);
+
+        db.get(query, (err, row) => {
             if (err) {
-                console.error('DB error on SELECT:', err.message);
+                console.error('DB error:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+                return res.end(JSON.stringify({ success: false, message: 'Server Error' }));
             }
 
             if (!row) {
@@ -147,31 +98,21 @@ async function handleSignIn(req, res) {
                 return res.end(JSON.stringify({ success: false, message: 'Invalid username or password' }));
             }
 
-            // 4. Verify Password
-            // Note: Even with SQLi, the attacker still needs to bypass this check 
-            // OR use the injection to return a row where they know the password.
-            const match = await bcrypt.compare(password, row.password_hash);
-            if (!match) {
-                res.writeHead(401, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'Invalid username or password' }));
-            }
-
+            // If the SQL returns a row, we trust it immediately. No further checks.
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({
                 success: true,
-                username: username,
-                account_id: row.account_id,
-                date_created: row.date_created,
-                first_name: row.first_name,
-                last_name: row.last_name,
-                email: row.email
+                username: row.username,
+                account_id: row.id,
+                email: row.email,
+                first_name: row.first_name // This is where we will see the spilled data
             }));
         });
 
     } catch (err) {
-        console.error('Error in handleSignIn', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
+        console.error('Error:', err);
+        res.writeHead(500);
+        res.end(JSON.stringify({ success: false }));
     }
 }
 
