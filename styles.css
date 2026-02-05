@@ -59,3 +59,7 @@
   width: 80vw;   /* 80% of the viewport width */
   max-width: 1000px; /* Optional: prevents it from getting too wide on large screens */
 }
+
+h2, h3 {
+    color: red;
+}
