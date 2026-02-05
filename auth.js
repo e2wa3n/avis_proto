@@ -103,9 +103,13 @@ async function handleCreateAccount(req, res) {
     }
 }
 
+// ------vulnerable code in handleSignIn() ---------
+
 async function handleSignIn(req, res) {
     try {
         const { username, password } = req.body;
+        
+        // 1. Basic Validation (This is fine to keep)
         if (!username || !password) {
             res.writeHead(400, {'Content-Type': 'application/json' });
             return res.end(
@@ -116,70 +120,58 @@ async function handleSignIn(req, res) {
             );
         }
 
-        db.get(
-            `SELECT id AS account_id,
-                password_hash,
-                date_created,
-                first_name,
-                last_name,
-                email
-                FROM accounts
-                WHERE username = ?;`,
-            [username],
-            async (err, row) => {
-                if (err) {
-                    console.error('DB error on SELECT:', err.message);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    return res.end(
-                        JSON.stringify({
-                            success: false,
-                            message: 'Internal Server Error'
-                        })
-                    );
-                }
+        // 2. THE VULNERABLE QUERY
+        // ❌ WEAKNESS: Direct string concatenation allows SQL injection
+        const query = `SELECT id AS account_id, 
+                              password_hash, 
+                              date_created, 
+                              first_name, 
+                              last_name, 
+                              email 
+                       FROM accounts 
+                       WHERE username = '${username}'`;
+        
+        // (Optional) Log the query to the terminal so the class can see the injection happening
+        console.log(`Executing SQL Query: ${query}`);
 
-                if (!row) {
-                    res.writeHead(401, { 'Content-Type': 'application/json' });
-                    return res.end(
-                        JSON.stringify({
-                        success: false,
-                        message: 'Invalid username or password'
-                       })
-                    );
-                }
-
-                const match = await bcrypt.compare(password, row.password_hash);
-                if (!match) {
-                    res.writeHead(401, { 'Content-Type': 'application/json' });
-                    return res.end(
-                        JSON.stringify({
-                            success: false,
-                            message: 'Invalid username or password'
-                        })
-                    );
-                }
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: true,
-                    username: username,
-                    account_id: row.account_id,
-                    date_created: row.date_created,
-                    first_name: row.first_name,
-                    last_name: row.last_name,
-                    email: row.email
-                }));
+        // 3. Execute the query without parameters
+        db.get(query, async (err, row) => {
+            if (err) {
+                console.error('DB error on SELECT:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
             }
-        );
-    }   catch (err) {
+
+            if (!row) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Invalid username or password' }));
+            }
+
+            // 4. Verify Password
+            // Note: Even with SQLi, the attacker still needs to bypass this check 
+            // OR use the injection to return a row where they know the password.
+            const match = await bcrypt.compare(password, row.password_hash);
+            if (!match) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Invalid username or password' }));
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+                success: true,
+                username: username,
+                account_id: row.account_id,
+                date_created: row.date_created,
+                first_name: row.first_name,
+                last_name: row.last_name,
+                email: row.email
+            }));
+        });
+
+    } catch (err) {
         console.error('Error in handleSignIn', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(
-            JSON.stringify({
-                success: false,
-                message: 'Internal Server Error'
-            })
-        );
+        res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
     }
 }
 
