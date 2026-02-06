@@ -5,13 +5,13 @@ const sqlite3 = require('sqlite3').verbose();
 const bcrypt  = require('bcrypt');
 const path    = require('path');
 
-const DB_PATH = path.join(__dirname, 'users.db');
+const DB_PATH = path.join(__dirname, 'users_hacked.db');
 
 const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) {
-        console.error('Could not open users.db', err.message);
+        console.error('Could not open users_hacked.db', err.message);
     } else {
-        console.log('Opened users.db');
+        console.log('Opened users_hacked.db');
     }
 });
 
@@ -80,9 +80,7 @@ async function handleSignIn(req, res) {
 
         // ❌ VULNERABILITY: SQL Injection + Insecure Authentication Logic
         // We are checking the password INSIDE the query string.
-        const query = `SELECT * FROM accounts 
-                       WHERE username = '${username}' 
-                       AND password_hash = '${password}'`;
+        const query = `SELECT * FROM accounts WHERE username = '${username}' AND password_hash = '${password}'`;
 
         console.log(`[SQLi DEMO] Executing Query: ${query}`);
 
