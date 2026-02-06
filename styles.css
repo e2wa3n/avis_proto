@@ -63,3 +63,13 @@
 h2, h3 {
     color: red;
 }
+
+/* Presentation Mode: Make inputs massive so we can see the exploit */
+input[type="text"], 
+input[type="password"] {
+    width: 100%;           /* Takes up the whole width of the container */
+    /*min-width: 600px;      /* Forces it to be at least 600px wide */
+    /*padding: 10px;         /* Adds some breathing room */
+    /*font-size: 1.2rem;     /* Makes the text bigger for the projector */
+    font-family: monospace;/* Uses code font so special chars like ' and -- are clear */
+}

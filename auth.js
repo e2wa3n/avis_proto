@@ -78,7 +78,7 @@ async function handleSignIn(req, res) {
             return res.end(JSON.stringify({ success: false, message: 'Missing credentials' }));
         }
 
-        // ❌ VULNERABILITY: SQL Injection + Insecure Authentication Logic
+        // VULNERABILITY: SQL Injection + Insecure Authentication Logic
         // We are checking the password INSIDE the query string.
         const query = `SELECT * FROM accounts WHERE username = '${username}' AND password_hash = '${password}'`;
 
